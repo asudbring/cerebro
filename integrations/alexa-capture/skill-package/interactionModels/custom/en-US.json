@@ -91,6 +91,23 @@
           ]
         },
         {
+          "name": "DailyDigestIntent",
+          "slots": [],
+          "samples": [
+            "daily digest",
+            "give me my daily digest",
+            "what's my digest",
+            "what's today's digest",
+            "morning briefing",
+            "daily briefing",
+            "daily summary",
+            "what happened yesterday",
+            "catch me up",
+            "what did I miss",
+            "summary"
+          ]
+        },
+        {
           "name": "BrowseRecentIntent",
           "slots": [
             {

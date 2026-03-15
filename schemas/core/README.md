@@ -48,4 +48,10 @@ The `metadata` JSONB column follows this structure (extracted automatically by t
 
 ## Setup
 
-Run `schema.sql` in the Supabase SQL Editor, or see the [Getting Started guide](../../docs/01-getting-started.md) for step-by-step instructions.
+Run the migrations in order in the Supabase SQL Editor:
+
+1. **`schema.sql`** — Core thoughts table, vector index, RLS
+2. **`002-digest-channels.sql`** — Digest delivery channel tracking
+3. **`003-digest-cron.sql`** — pg_cron + pg_net scheduled digest jobs
+
+See the [Getting Started guide](../../docs/01-getting-started.md) for step-by-step instructions.

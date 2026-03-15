@@ -322,6 +322,22 @@ app.post("*", async (c) => {
         interaction.member?.user?.username ||
         interaction.user?.username ||
         "unknown";
+      const channelId = interaction.channel_id;
+      const guildId = interaction.guild_id;
+
+      // Register this channel for daily digest delivery
+      if (channelId) {
+        supabase.from("digest_channels").upsert(
+          {
+            source: "discord",
+            discord_channel_id: channelId,
+            discord_guild_id: guildId || null,
+          },
+          { onConflict: "source,discord_channel_id" },
+        ).then(({ error: uErr }) => {
+          if (uErr) console.error("Digest channel upsert error:", uErr);
+        });
+      }
 
       // Use EdgeRuntime.waitUntil to process after responding
       const processPromise = (async () => {
@@ -338,6 +354,8 @@ app.post("*", async (c) => {
               ...metadata,
               source: "discord",
               discord_sender: senderName,
+              discord_channel_id: channelId,
+              discord_guild_id: guildId,
             },
           });
 

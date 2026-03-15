@@ -392,6 +392,19 @@ app.post("*", async (c) => {
       return c.json({}, 200);
     }
 
+    // Register this conversation for daily digest delivery
+    await supabase.from("digest_channels").upsert(
+      {
+        source: "teams",
+        teams_service_url: serviceUrl,
+        teams_conversation_id: conversationId,
+        teams_user_name: senderName,
+      },
+      { onConflict: "source,teams_conversation_id" },
+    ).then(({ error: uErr }) => {
+      if (uErr) console.error("Digest channel upsert error:", uErr);
+    });
+
     // Parallel: embedding + metadata extraction
     const [embedding, metadata] = await Promise.all([
       getEmbedding(messageText),
