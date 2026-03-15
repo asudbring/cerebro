@@ -53,4 +53,6 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `docs/05-reminders-setup.md` — Calendar reminders setup (O365 + Google)
 - `docs/06-daily-digest-setup.md` — Daily digest setup (scheduling + delivery)
 - `docs/07-file-attachments-setup.md` — File attachment setup (vision + storage)
+- `schemas/core/005-add-status-column.sql` — Task status column and indexes
+- `docs/08-task-management-setup.md` — Task management setup guide
 - `LICENSE.md` — FSL-1.1-MIT terms

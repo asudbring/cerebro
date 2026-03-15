@@ -58,6 +58,23 @@
           ]
         },
         {
+          "name": "DeleteTaskIntent",
+          "slots": [
+            {
+              "name": "task",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "delete {task}",
+            "remove {task}",
+            "trash {task}",
+            "get rid of {task}",
+            "discard {task}",
+            "erase {task}"
+          ]
+        },
+        {
           "name": "SearchIntent",
           "slots": [
             {

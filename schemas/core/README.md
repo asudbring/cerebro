@@ -21,6 +21,7 @@ The foundational database schema for Cerebro.
 | `metadata` | `jsonb` | Extracted metadata (topics, people, action_items, type, source) |
 | `file_url` | `text` | Supabase Storage signed URL for attached file (nullable) |
 | `file_type` | `text` | MIME type of attached file, e.g. `image/png` (nullable) |
+| `status` | `text` | Task lifecycle: `open` (default), `done`, or `deleted` |
 | `created_at` | `timestamptz` | When the thought was captured |
 | `updated_at` | `timestamptz` | Last modification time (auto-updated) |
 
@@ -29,6 +30,8 @@ The foundational database schema for Cerebro.
 - **HNSW** on `embedding` — fast approximate nearest-neighbor search
 - **GIN** on `metadata` — efficient JSONB containment queries
 - **B-tree** on `created_at DESC` — fast date-range lookups
+- **B-tree** on `status` — fast status filtering
+- **Composite** on `(status, metadata->>'type')` — task queries by status and type
 
 ## Metadata Schema
 
@@ -59,5 +62,6 @@ Run the migrations in order in the Supabase SQL Editor:
 2. **`002-digest-channels.sql`** — Digest delivery channel tracking
 3. **`003-digest-cron.sql`** — pg_cron + pg_net scheduled digest jobs
 4. **`004-add-file-columns.sql`** — File attachment columns (file_url, file_type)
+5. **`005-add-status-column.sql`** — Task status column and indexes
 
 See the [Getting Started guide](../../docs/01-getting-started.md) for step-by-step instructions.

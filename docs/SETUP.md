@@ -37,6 +37,7 @@ Review the decision tree below, decide which features you want, and make sure yo
 | **Daily/Weekly Digest** | At least one capture source (Discord or Teams) already set up and working with thoughts captured |
 | **Digest email delivery** | [Resend account](https://resend.com) (free — 100 emails/day) |
 | **File Attachments** | Supabase Storage bucket | Free (1 GB included) |
+| **Task Management** | No additional accounts needed | Free |
 
 > **Tip:** If you're setting up Teams capture AND O365 calendar reminders, you'll reuse the same Entra ID app registration for both — just add the `Calendars.ReadWrite` permission when you get to Phase 3.
 
@@ -438,6 +439,34 @@ This is covered in the digest guide under **Email Setup with Resend**.
 
 ---
 
+## Phase 6: Task Management (OPTIONAL)
+
+> **Goal:** Complete, reopen, and delete tasks with natural language across all capture points.
+
+### Prerequisites Checklist
+
+- [ ] Phase 1 complete (core infrastructure)
+- [ ] At least one capture source working
+
+### Steps
+
+1. Run schema migration: `schemas/core/005-add-status-column.sql`
+2. Redeploy all Edge Functions
+3. (Discord only) Re-register slash commands with new task commands
+4. (Alexa only) Update interaction model with DeleteTaskIntent
+
+📖 Full guide → [Task Management Setup](08-task-management-setup.md)
+
+### 🚦 Verification Gate
+
+- [ ] Capture a task thought → confirmed as "task" type
+- [ ] Complete the task with "done: description" → ✅ marked done
+- [ ] Reopen with "reopen: description" → 🔄 reopened
+- [ ] Delete with "delete: description" → 🗑️ deleted
+- [ ] `list_thoughts` with `status: "done"` shows completed tasks
+
+---
+
 ## You're Done! 🎉
 
 Your Cerebro brain is now operational. Here's what you've built:
@@ -451,6 +480,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | Daily/weekly digest | Optional |
 | Email delivery | Optional |
 | File attachments | Optional |
+| Task management | Optional |
 
 ### Tips for Daily Use
 
@@ -485,6 +515,8 @@ Your Cerebro brain is now operational. Here's what you've built:
 > **Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in all Supabase Edge Functions.
 >
 > **Note:** File Attachments (Phase 5) requires no new environment variables — it uses existing Supabase credentials and the `OPENROUTER_API_KEY` already configured in Phase 1.
+>
+> **Note:** Task Management (Phase 6) requires no new environment variables — it uses existing Supabase credentials and the `OPENROUTER_API_KEY` already configured in Phase 1.
 
 ---
 
