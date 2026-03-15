@@ -315,6 +315,8 @@ server.registerTool(
             metadata: Record<string, unknown>;
             similarity: number;
             created_at: string;
+            file_url?: string;
+            file_type?: string;
           },
           i: number,
         ) => {
@@ -332,6 +334,10 @@ server.registerTool(
             parts.push(
               `Actions: ${(m.action_items as string[]).join("; ")}`,
             );
+          if (m.has_file)
+            parts.push(`📎 File: ${m.file_name || "attached"}${t.file_url ? " (saved)" : " (scanned only)"}`);
+          if (m.file_description)
+            parts.push(`File summary: ${(m.file_description as string).slice(0, 200)}`);
           parts.push(`\n${t.content}`);
           return parts.join("\n");
         },
@@ -380,19 +386,24 @@ server.registerTool(
         .number()
         .optional()
         .describe("Only thoughts from the last N days"),
+      has_file: z
+        .boolean()
+        .optional()
+        .describe("Filter to only thoughts with file attachments"),
     },
   },
-  async ({ limit, type, topic, person, days }) => {
+  async ({ limit, type, topic, person, days, has_file }) => {
     try {
       let q = supabase
         .from("thoughts")
-        .select("content, metadata, created_at")
+        .select("content, metadata, created_at, file_url, file_type")
         .order("created_at", { ascending: false })
         .limit(limit);
 
       if (type) q = q.contains("metadata", { type });
       if (topic) q = q.contains("metadata", { topics: [topic] });
       if (person) q = q.contains("metadata", { people: [person] });
+      if (has_file) q = q.contains("metadata", { has_file: true });
       if (days) {
         const since = new Date();
         since.setDate(since.getDate() - days);
@@ -424,6 +435,8 @@ server.registerTool(
             content: string;
             metadata: Record<string, unknown>;
             created_at: string;
+            file_url?: string;
+            file_type?: string;
           },
           i: number,
         ) => {
@@ -431,7 +444,10 @@ server.registerTool(
           const tags = Array.isArray(m.topics)
             ? (m.topics as string[]).join(", ")
             : "";
-          return `${i + 1}. [${new Date(t.created_at).toLocaleDateString()}] (${m.type || "??"}${tags ? " - " + tags : ""})\n   ${t.content}`;
+          const fileTag = m.has_file
+            ? ` 📎${t.file_url ? "" : " (scan only)"}`
+            : "";
+          return `${i + 1}. [${new Date(t.created_at).toLocaleDateString()}] (${m.type || "??"}${tags ? " - " + tags : ""}${fileTag})\n   ${t.content}`;
         },
       );
 

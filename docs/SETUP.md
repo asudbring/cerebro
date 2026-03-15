@@ -36,6 +36,7 @@ Review the decision tree below, decide which features you want, and make sure yo
 | **Google Calendar reminders** | Google Cloud account (free tier) + personal or Workspace Gmail for the target calendar |
 | **Daily/Weekly Digest** | At least one capture source (Discord or Teams) already set up and working with thoughts captured |
 | **Digest email delivery** | [Resend account](https://resend.com) (free — 100 emails/day) |
+| **File Attachments** | Supabase Storage bucket | Free (1 GB included) |
 
 > **Tip:** If you're setting up Teams capture AND O365 calendar reminders, you'll reuse the same Entra ID app registration for both — just add the `Calendars.ReadWrite` permission when you get to Phase 3.
 
@@ -129,8 +130,17 @@ START HERE
    ┌───────────────────┐          │
    │  + Email Delivery │          │
    │  (Resend — free)  │          │
-   └───────────────────┘          │
-                                   │
+   └───────┬───────────┘          │
+           │                       │
+           ▼                       │
+╔══════════════════════╗           │
+║  File Attachments    ║           │
+║  AI vision + storage ║           │
+╚══════════╤═══════════╝           │
+           │                       │
+    ✅ Verify: file scan           │
+    ✅ + storage works             │
+           │                       │
            DONE! ◀─────────────────┘
 ```
 
@@ -400,6 +410,34 @@ This is covered in the digest guide under **Email Setup with Resend**.
 
 ---
 
+## Phase 5: File Attachments (OPTIONAL)
+
+> **Goal:** Scan images, PDFs, and documents posted in Teams or Discord.
+
+### Prerequisites Checklist
+
+- [ ] Phase 1 complete (core infrastructure)
+- [ ] At least one capture source working (Teams or Discord)
+- [ ] Supabase Storage bucket not yet created
+
+### Steps
+
+1. Run schema migration: `schemas/core/004-add-file-columns.sql`
+2. Create `cerebro-files` storage bucket in Supabase Dashboard
+3. Redeploy capture Edge Functions
+4. (Discord only) Re-register slash commands with file option
+
+📖 Full guide → [File Attachments Setup](07-file-attachments-setup.md)
+
+### 🚦 Verification Gate
+
+- [ ] Send an image to Teams/Discord → bot replies with AI description
+- [ ] Send a PDF → content is scanned and captured
+- [ ] "Remove file" button works → file deleted, scan text preserved
+- [ ] `list_thoughts` with `has_file: true` returns file thoughts only
+
+---
+
 ## You're Done! 🎉
 
 Your Cerebro brain is now operational. Here's what you've built:
@@ -412,6 +450,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | Calendar reminders | Optional |
 | Daily/weekly digest | Optional |
 | Email delivery | Optional |
+| File attachments | Optional |
 
 ### Tips for Daily Use
 
@@ -444,6 +483,8 @@ Your Cerebro brain is now operational. Here's what you've built:
 | `DIGEST_EMAIL_FROM` | Phase 4 | Digest email | If using email |
 
 > **Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in all Supabase Edge Functions.
+>
+> **Note:** File Attachments (Phase 5) requires no new environment variables — it uses existing Supabase credentials and the `OPENROUTER_API_KEY` already configured in Phase 1.
 
 ---
 

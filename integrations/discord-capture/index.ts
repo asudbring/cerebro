@@ -4,6 +4,24 @@ import { Hono } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import nacl from "tweetnacl";
 
+// Discord Slash Commands Registration (run once via Discord API):
+// POST /applications/{app_id}/commands
+// {
+//   "name": "capture",
+//   "description": "Capture a thought or file to Cerebro",
+//   "options": [
+//     { "name": "thought", "description": "The thought to capture", "type": 3 },
+//     { "name": "file", "description": "Attach a file to scan and store", "type": 11 }
+//   ]
+// }
+// {
+//   "name": "search",
+//   "description": "Search your thoughts",
+//   "options": [
+//     { "name": "query", "description": "Search query", "type": 3, "required": true }
+//   ]
+// }
+
 // --- Environment ---
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -255,6 +273,148 @@ async function createCalendarReminders(
   return created;
 }
 
+// --- File Analysis ---
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunks: string[] = [];
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+  }
+  return btoa(chunks.join(""));
+}
+
+function mimeFromExtension(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const map: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    doc: "application/msword",
+    txt: "text/plain",
+    csv: "text/csv",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
+async function analyzeFileWithVision(
+  base64Data: string,
+  contentType: string,
+  fileName: string,
+): Promise<string> {
+  const systemPrompt =
+    "You are analyzing a file for a personal knowledge base. Describe the contents in detail. If there is text, perform OCR and include it. Provide a comprehensive summary.";
+
+  // Text/CSV: decode and return directly
+  if (contentType.startsWith("text/") || contentType === "text/csv") {
+    try {
+      const decoded = atob(base64Data);
+      const preview = decoded.slice(0, 3000);
+      return `[Text file: ${fileName}]\n${preview}${decoded.length > 3000 ? "\n...(truncated)" : ""}`;
+    } catch {
+      return `[Text file: ${fileName}] — could not decode contents.`;
+    }
+  }
+
+  // DOCX: attempt basic text extraction from XML, fall back to vision description
+  if (
+    contentType ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    contentType === "application/msword"
+  ) {
+    // DOCX/DOC cannot be reliably extracted in Deno without libraries;
+    // ask the vision model to describe based on the filename
+    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        max_tokens: 1000,
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `A Word document named "${fileName}" was uploaded. I cannot extract its text directly. Please acknowledge this file and note that it has been stored for reference.`,
+          },
+        ],
+      }),
+    });
+    const d = await r.json();
+    return d.choices?.[0]?.message?.content || `[Document: ${fileName}]`;
+  }
+
+  // Images and PDFs: send to vision model
+  if (contentType.startsWith("image/") || contentType === "application/pdf") {
+    const mediaType = contentType === "application/pdf"
+      ? "image/png" // Vision models handle PDF first-page as image
+      : contentType;
+    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        max_tokens: 1000,
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this file (${fileName}). Describe what you see in detail.`,
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${mediaType};base64,${base64Data}`,
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const d = await r.json();
+    return d.choices?.[0]?.message?.content || `[File: ${fileName}] — analysis unavailable.`;
+  }
+
+  // Fallback for unsupported types
+  return `[File: ${fileName}] (${contentType}) — stored but content analysis not supported for this file type.`;
+}
+
+async function uploadToStorage(
+  buffer: ArrayBuffer,
+  filename: string,
+  contentType: string,
+): Promise<{ url: string | null; path: string | null }> {
+  const sanitizedName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `discord/${Date.now()}_${sanitizedName}`;
+  const { error } = await supabase.storage
+    .from("cerebro-files")
+    .upload(path, buffer, { contentType, upsert: false });
+  if (error) {
+    console.error("Storage upload error:", error);
+    return { url: null, path: null };
+  }
+  const { data: urlData } = await supabase.storage
+    .from("cerebro-files")
+    .createSignedUrl(path, 365 * 24 * 60 * 60);
+  return { url: urlData?.signedUrl || null, path };
+}
+
 // --- Discord follow-up message (for deferred responses) ---
 
 async function sendFollowup(
@@ -272,6 +432,37 @@ async function sendFollowup(
     const msg = await r.text().catch(() => "");
     console.error(`Discord followup failed: ${r.status} ${msg}`);
   }
+}
+
+async function sendFollowupWithComponents(
+  applicationId: string,
+  interactionToken: string,
+  content: string,
+  components: unknown[],
+): Promise<void> {
+  const url = `https://discord.com/api/v10/webhooks/${applicationId}/${interactionToken}`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, components }),
+  });
+  if (!r.ok) {
+    const msg = await r.text().catch(() => "");
+    console.error(`Discord followup failed: ${r.status} ${msg}`);
+  }
+}
+
+async function editOriginalMessage(
+  applicationId: string,
+  interactionToken: string,
+  content: string,
+): Promise<void> {
+  const url = `https://discord.com/api/v10/webhooks/${applicationId}/${interactionToken}/messages/@original`;
+  await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, components: [] }),
+  });
 }
 
 // --- Hono App ---
@@ -304,12 +495,21 @@ app.post("*", async (c) => {
           (o: { name: string }) => o.name === "thought",
         )?.value || "";
 
-      if (!thought) {
+      // Check for file attachment (option type 11)
+      const fileOption = interaction.data?.options?.find(
+        (o: { name: string }) => o.name === "file",
+      );
+      const attachmentId = fileOption?.value;
+      const attachment = attachmentId
+        ? interaction.data?.resolved?.attachments?.[attachmentId]
+        : null;
+
+      if (!thought && !attachment) {
         return c.json({
           type: 4,
           data: {
             content:
-              "Please provide a thought to capture. Usage: `/capture thought:your thought here`",
+              "Please provide a thought or a file. Usage: `/capture thought:your text file:attachment`",
           },
         });
       }
@@ -342,22 +542,96 @@ app.post("*", async (c) => {
       // Use EdgeRuntime.waitUntil to process after responding
       const processPromise = (async () => {
         try {
+          let content = thought;
+          let fileUrl: string | null = null;
+          let fileType: string | null = null;
+          let storagePath: string | null = null;
+          let fileDescription = "";
+          let fileName = "";
+
+          // Process file attachment if present
+          if (attachment) {
+            fileName = attachment.filename || "unknown_file";
+            const attachmentUrl = attachment.url;
+            const contentType =
+              attachment.content_type || mimeFromExtension(fileName);
+            fileType = contentType;
+
+            // File size check (20MB limit)
+            if (attachment.size > 20_000_000) {
+              fileDescription =
+                "File too large to analyze (>20MB). Metadata only.";
+              if (content) {
+                content += `\n\n📎 File: ${fileName}\n${fileDescription}`;
+              } else {
+                content = `📎 File: ${fileName}\n${fileDescription}`;
+              }
+            } else {
+              // Download file from Discord CDN
+              const fileResponse = await fetch(attachmentUrl);
+              if (!fileResponse.ok) {
+                throw new Error(
+                  `Failed to download file: ${fileResponse.status}`,
+                );
+              }
+              const buffer = await fileResponse.arrayBuffer();
+
+              // Analyze file
+              const base64 = arrayBufferToBase64(buffer);
+              fileDescription = await analyzeFileWithVision(
+                base64,
+                contentType,
+                fileName,
+              );
+
+              // Upload to storage
+              const uploadResult = await uploadToStorage(
+                buffer,
+                fileName,
+                contentType,
+              );
+              fileUrl = uploadResult.url;
+              storagePath = uploadResult.path;
+
+              // Build combined content
+              if (content) {
+                content += `\n\n📎 File: ${fileName}\n${fileDescription}`;
+              } else {
+                content = `📎 File: ${fileName}\n${fileDescription}`;
+              }
+            }
+          }
+
           const [embedding, metadata] = await Promise.all([
-            getEmbedding(thought),
-            extractMetadata(thought),
+            getEmbedding(content),
+            extractMetadata(content),
           ]);
 
-          const { error } = await supabase.from("thoughts").insert({
-            content: thought,
-            embedding,
-            metadata: {
-              ...metadata,
-              source: "discord",
-              discord_sender: senderName,
-              discord_channel_id: channelId,
-              discord_guild_id: guildId,
-            },
-          });
+          // Add file metadata
+          if (attachment) {
+            (metadata as Record<string, unknown>).has_file = true;
+            (metadata as Record<string, unknown>).file_name = fileName;
+            (metadata as Record<string, unknown>).file_description =
+              fileDescription.slice(0, 500);
+          }
+
+          const { data: insertData, error } = await supabase
+            .from("thoughts")
+            .insert({
+              content,
+              embedding,
+              file_url: fileUrl,
+              file_type: fileType,
+              metadata: {
+                ...metadata,
+                source: "discord",
+                discord_sender: senderName,
+                discord_channel_id: channelId,
+                discord_guild_id: guildId,
+              },
+            })
+            .select("id")
+            .single();
 
           if (error) {
             console.error("Supabase insert error:", error);
@@ -379,18 +653,62 @@ app.post("*", async (c) => {
             confirmation += `\n📋 Actions: ${(meta.action_items as string[]).join("; ")}`;
 
           // Create calendar reminders if detected
-          const calendars = await createCalendarReminders(meta, thought);
+          const calendars = await createCalendarReminders(meta, content);
           if (calendars.length) {
             confirmation += `\n⏰ Reminder created on ${calendars.join(" + ")}`;
           } else if (meta.has_reminder) {
             confirmation += `\n⏰ Reminder detected but no calendar configured`;
           }
 
-          await sendFollowup(
-            applicationId,
-            interactionToken,
-            confirmation,
-          );
+          // Add file info to confirmation and send response
+          if (attachment && fileUrl) {
+            confirmation += `\n\n📎 **${fileName}** — saved to Cerebro storage`;
+            confirmation += `\n${fileDescription.slice(0, 300)}`;
+
+            // Send with "Remove file" button
+            const thoughtId = insertData?.id;
+            if (thoughtId && storagePath) {
+              const components = [
+                {
+                  type: 1, // ACTION_ROW
+                  components: [
+                    {
+                      type: 2, // BUTTON
+                      style: 4, // DANGER
+                      label: "🗑️ Remove file (keep scan)",
+                      custom_id: `remove_file:${thoughtId}:${storagePath}`,
+                    },
+                  ],
+                },
+              ];
+              await sendFollowupWithComponents(
+                applicationId,
+                interactionToken,
+                confirmation,
+                components,
+              );
+            } else {
+              await sendFollowup(
+                applicationId,
+                interactionToken,
+                confirmation,
+              );
+            }
+          } else if (attachment && !fileUrl) {
+            confirmation += `\n\n📎 **${fileName}** — scanned (file not saved)`;
+            confirmation += `\n${fileDescription.slice(0, 300)}`;
+            await sendFollowup(
+              applicationId,
+              interactionToken,
+              confirmation,
+            );
+          } else {
+            await sendFollowup(
+              applicationId,
+              interactionToken,
+              confirmation,
+            );
+          }
         } catch (err) {
           console.error("Processing error:", err);
           await sendFollowup(
@@ -494,6 +812,70 @@ app.post("*", async (c) => {
       type: 4,
       data: { content: "Unknown command." },
     });
+  }
+
+  // Type 3: MESSAGE_COMPONENT (button clicks)
+  if (interaction.type === 3) {
+    const customId = interaction.data?.custom_id || "";
+    const applicationId = interaction.application_id;
+    const interactionToken = interaction.token;
+
+    if (customId.startsWith("remove_file:")) {
+      const parts = customId.split(":");
+      const thoughtId = parts[1];
+      const storagePath = parts.slice(2).join(":"); // Path might contain colons
+
+      // Process file removal in background
+      const removePromise = (async () => {
+        try {
+          // Delete from storage
+          await supabase.storage.from("cerebro-files").remove([storagePath]);
+
+          // Clear file_url and file_type on the thought
+          await supabase
+            .from("thoughts")
+            .update({ file_url: null, file_type: null })
+            .eq("id", thoughtId);
+
+          // Update metadata to reflect file removal
+          const { data: thought } = await supabase
+            .from("thoughts")
+            .select("metadata")
+            .eq("id", thoughtId)
+            .single();
+
+          if (thought?.metadata) {
+            const meta = {
+              ...(thought.metadata as Record<string, unknown>),
+            };
+            meta.has_file = false;
+            delete meta.file_name;
+            delete meta.file_description;
+            await supabase
+              .from("thoughts")
+              .update({ metadata: meta })
+              .eq("id", thoughtId);
+          }
+
+          // Update the original message to remove buttons
+          await editOriginalMessage(
+            applicationId,
+            interactionToken,
+            "📄 File removed from storage. The scanned text is still captured in your thought.",
+          );
+        } catch (err) {
+          console.error("Remove file error:", err);
+        }
+      })();
+
+      EdgeRuntime.waitUntil(removePromise);
+
+      // Acknowledge the button click immediately (type 6 = DEFERRED_UPDATE_MESSAGE)
+      return c.json({ type: 6 });
+    }
+
+    // Unknown component interaction
+    return c.json({ type: 6 });
   }
 
   return c.json({}, 200);

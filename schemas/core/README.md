@@ -19,6 +19,8 @@ The foundational database schema for Cerebro.
 | `content` | `text` | The raw thought text |
 | `embedding` | `vector(1536)` | OpenAI text-embedding-3-small vector |
 | `metadata` | `jsonb` | Extracted metadata (topics, people, action_items, type, source) |
+| `file_url` | `text` | Supabase Storage signed URL for attached file (nullable) |
+| `file_type` | `text` | MIME type of attached file, e.g. `image/png` (nullable) |
 | `created_at` | `timestamptz` | When the thought was captured |
 | `updated_at` | `timestamptz` | Last modification time (auto-updated) |
 
@@ -42,6 +44,9 @@ The `metadata` JSONB column follows this structure (extracted automatically by t
   "has_reminder": false,
   "reminder_title": "",
   "reminder_datetime": "",
+  "has_file": false,
+  "file_name": "document.pdf",
+  "file_description": "AI-generated description of file contents",
   "source": "mcp | teams | discord | alexa"
 }
 ```
@@ -53,5 +58,6 @@ Run the migrations in order in the Supabase SQL Editor:
 1. **`schema.sql`** — Core thoughts table, vector index, RLS
 2. **`002-digest-channels.sql`** — Digest delivery channel tracking
 3. **`003-digest-cron.sql`** — pg_cron + pg_net scheduled digest jobs
+4. **`004-add-file-columns.sql`** — File attachment columns (file_url, file_type)
 
 See the [Getting Started guide](../../docs/01-getting-started.md) for step-by-step instructions.

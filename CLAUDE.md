@@ -40,6 +40,7 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `schemas/core/schema.sql` — Core database schema (thoughts table, vector search, RLS)
 - `schemas/core/002-digest-channels.sql` — Digest channels table migration
 - `schemas/core/003-digest-cron.sql` — pg_cron scheduling for daily/weekly digests
+- `schemas/core/004-add-file-columns.sql` — File attachment columns (file_url, file_type)
 - `integrations/mcp-server/index.ts` — Core MCP Edge Function
 - `integrations/teams-capture/index.ts` — Microsoft Teams capture bot (Bot Framework)
 - `integrations/discord-capture/index.ts` — Discord capture bot (slash commands)
@@ -51,4 +52,5 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `docs/04-alexa-setup.md` — Alexa voice setup
 - `docs/05-reminders-setup.md` — Calendar reminders setup (O365 + Google)
 - `docs/06-daily-digest-setup.md` — Daily digest setup (scheduling + delivery)
+- `docs/07-file-attachments-setup.md` — File attachment setup (vision + storage)
 - `LICENSE.md` — FSL-1.1-MIT terms
