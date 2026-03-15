@@ -41,7 +41,9 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `integrations/mcp-server/index.ts` — Core MCP Edge Function
 - `integrations/teams-capture/index.ts` — Microsoft Teams capture bot (Bot Framework)
 - `integrations/discord-capture/index.ts` — Discord capture bot (slash commands)
+- `integrations/alexa-capture/index.ts` — Alexa voice skill (HTTPS endpoint)
 - `docs/01-getting-started.md` — Full setup guide
 - `docs/02-teams-capture-setup.md` — Teams integration setup
 - `docs/03-discord-capture-setup.md` — Discord integration setup
+- `docs/04-alexa-setup.md` — Alexa voice setup
 - `LICENSE.md` — FSL-1.1-MIT terms

@@ -1,0 +1,147 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "cerebro",
+      "intents": [
+        {
+          "name": "CaptureThoughtIntent",
+          "slots": [
+            {
+              "name": "thought",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "capture {thought}",
+            "remember {thought}",
+            "save {thought}",
+            "note {thought}",
+            "store {thought}",
+            "record {thought}",
+            "log {thought}",
+            "{thought}"
+          ]
+        },
+        {
+          "name": "CompleteTaskIntent",
+          "slots": [
+            {
+              "name": "task",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "done {task}",
+            "finished {task}",
+            "completed {task}",
+            "complete {task}",
+            "mark {task} as done",
+            "mark {task} as complete",
+            "I finished {task}",
+            "I completed {task}"
+          ]
+        },
+        {
+          "name": "ReopenTaskIntent",
+          "slots": [
+            {
+              "name": "task",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "reopen {task}",
+            "undo {task}",
+            "undone {task}",
+            "bring back {task}",
+            "reactivate {task}"
+          ]
+        },
+        {
+          "name": "SearchIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "search for {query}",
+            "search {query}",
+            "find {query}",
+            "look up {query}",
+            "what do I know about {query}",
+            "what did I say about {query}",
+            "do I have anything about {query}",
+            "about {query}"
+          ]
+        },
+        {
+          "name": "StatsIntent",
+          "slots": [],
+          "samples": [
+            "stats",
+            "give me stats",
+            "brain stats",
+            "how many thoughts do I have",
+            "how big is my brain",
+            "what are my stats",
+            "show me stats",
+            "status"
+          ]
+        },
+        {
+          "name": "BrowseRecentIntent",
+          "slots": [
+            {
+              "name": "type",
+              "type": "ThoughtType"
+            }
+          ],
+          "samples": [
+            "what's recent",
+            "what did I capture recently",
+            "what did I capture today",
+            "show me recent thoughts",
+            "browse recent",
+            "latest thoughts",
+            "recent {type}",
+            "latest {type}",
+            "what are my recent {type}"
+          ]
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        }
+      ],
+      "types": [
+        {
+          "name": "ThoughtType",
+          "values": [
+            { "name": { "value": "ideas", "synonyms": ["idea"] } },
+            { "name": { "value": "tasks", "synonyms": ["task", "to do", "todos"] } },
+            { "name": { "value": "person notes", "synonyms": ["person note", "people notes"] } },
+            { "name": { "value": "project updates", "synonyms": ["project update", "updates"] } },
+            { "name": { "value": "meeting notes", "synonyms": ["meeting note", "meetings"] } },
+            { "name": { "value": "decisions", "synonyms": ["decision"] } },
+            { "name": { "value": "reflections", "synonyms": ["reflection"] } },
+            { "name": { "value": "references", "synonyms": ["reference"] } }
+          ]
+        }
+      ]
+    }
+  }
+}

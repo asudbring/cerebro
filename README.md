@@ -44,13 +44,14 @@ Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nat
 | **Any MCP client** | Direct tool calls via MCP server | [Getting Started](docs/01-getting-started.md) |
 | **Microsoft Teams** | DM or @mention the Cerebro bot | [Teams Setup](docs/02-teams-capture-setup.md) |
 | **Discord** | `/capture` and `/search` slash commands | [Discord Setup](docs/03-discord-capture-setup.md) |
+| **Alexa** | "Alexa, tell cerebro …" voice commands | [Alexa Setup](docs/04-alexa-setup.md) |
 
 ## Project Structure
 
 ```
 docs/           — Setup guides and documentation
 extensions/     — Feature extensions (coming soon)
-integrations/   — MCP server, Teams capture, Discord capture
+integrations/   — MCP server, Teams capture, Discord capture, Alexa voice
 schemas/        — Database schemas
 ```
 
