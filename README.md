@@ -1,20 +1,24 @@
+<p align="center">
+  <img src=".github/cerebro-logo.jpg" alt="Cerebro" width="300">
+</p>
+
 <h1 align="center">Cerebro</h1>
 
-<p align="center"><em>A cloud brain for storing thoughts — built for AI tools.</em></p>
+<p align="center"><em>Your personal knowledge brain in the cloud — capture from anywhere, search by meaning.</em></p>
 
 ---
 
-One database, one AI gateway, one MCP server. Any AI you use can plug in. No middleware, no SaaS chains, no Zapier.
+Cerebro gives you a single place to store every fleeting thought, decision, and reminder — then find it again by asking what it *meant*, not what words you used. It runs on Supabase (free tier), talks to your AI tools over MCP, and accepts input from Discord, Teams, Alexa, or any MCP client.
 
-Cerebro is a persistent memory layer for your AI tools. It stores your thoughts with vector embeddings and structured metadata in a Supabase database, then exposes them via MCP so that Claude, ChatGPT, Cursor, Claude Code, or whatever ships next month can all search and write to the same brain.
+The stack is deliberately simple: a PostgreSQL database with vector search, an AI gateway for embeddings, and Edge Functions for each integration. No middleware layers, no paid connectors, no glue services.
 
-Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nate B. Jones.
+Inspired by the [Open Brain](https://github.com/NateBJones/OB1) project by Nate B. Jones.
 
 ## How It Works
 
-**When you capture a thought:** Your AI client sends text to the `capture_thought` MCP tool → the server generates a 1536-dimensional embedding AND extracts metadata (topics, people, action items, type) in parallel → both get stored as a single row in Supabase → confirmation returned.
+**Capturing:** You send a thought from any source (chat message, voice command, AI tool). Cerebro generates a vector embedding and extracts structured metadata (topics, people, action items, type) in parallel, then stores everything as a single row.
 
-**When you search:** Your AI sends the query → the server embeds it → Supabase matches against every stored thought by vector similarity → results come back ranked by meaning, not keywords.
+**Searching:** You describe what you're looking for in plain language. Cerebro embeds your query and runs a cosine similarity search across all stored thoughts — so "career decisions" finds a note about "Sarah thinking about leaving her job" even with zero overlapping words.
 
 ## Getting Started
 
