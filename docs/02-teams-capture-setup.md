@@ -220,6 +220,19 @@ Open Supabase Dashboard → Table Editor → `thoughts`. You should see new rows
 
 ---
 
+## ✅ Verification Checklist
+
+Before moving on, confirm all of these pass:
+
+- [ ] **Personal DM** — typing a thought to the Cerebro bot returns a confirmation with extracted metadata (topics, people, type)
+- [ ] **Channel @mention** — @mentioning the bot in a channel captures the thought and replies in the thread
+- [ ] **Supabase data** — Table Editor → `thoughts` shows rows with `metadata.source` = `"teams"`
+- [ ] **Edge Function health** — visiting `https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-teams` in a browser returns `{"status":"ok","service":"cerebro-teams"}`
+
+> If any check fails, see the **Troubleshooting** section above.
+
+---
+
 ## Calendar Reminders
 
 When you capture a thought that mentions a future date or time (e.g. "remind me to check the deployment logs next Friday at 10am"), Cerebro can automatically create calendar events on O365 and/or Google Calendar.

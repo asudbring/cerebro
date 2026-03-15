@@ -169,6 +169,21 @@ The Edge Function validates:
 
 ---
 
+## ✅ Verification Checklist
+
+Before moving on, confirm all of these pass:
+
+- [ ] **Simulator capture** — "tell cerebro I need to buy groceries" returns "Captured: I need to buy groceries. Tagged as task."
+- [ ] **Simulator search** — "ask cerebro about groceries" returns "I found 1 result…"
+- [ ] **Simulator task management** — "tell cerebro done buy groceries" marks the thought as done
+- [ ] **Simulator stats** — "ask cerebro for stats" returns a count of your thoughts
+- [ ] **Supabase data** — Table Editor → `thoughts` shows rows with `metadata.source` = `"alexa"`
+- [ ] **(Optional) Physical device** — "Alexa, tell cerebro hello" responds with the welcome prompt
+
+> If any check fails, see the **Troubleshooting** section below.
+
+---
+
 ## Voice Command Reference
 
 ### Capture Thoughts

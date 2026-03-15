@@ -1,0 +1,410 @@
+# Cerebro Setup Guide
+
+The complete, step-by-step guide to deploying your Cerebro brain. Start with the core infrastructure, add your preferred capture sources, then layer on optional features.
+
+**Time to first working system: ~30 minutes** (core + one capture source).
+
+---
+
+## Architecture Overview
+
+```
+                         ┌─────────────────────────┐
+                         │      Supabase            │
+                         │  ┌───────────────────┐   │
+                         │  │  PostgreSQL        │   │
+┌──────────────────┐     │  │  + pgvector        │   │     ┌──────────────────┐
+│  Capture Sources │     │  │  + pg_cron         │   │     │  AI Clients      │
+│                  │     │  └───────────────────┘   │     │                  │
+│  Discord ────────┼────▶│                          │◀────┼── Claude Desktop │
+│  Teams ──────────┼────▶│  Edge Functions:          │◀────┼── ChatGPT       │
+│  Alexa ──────────┼────▶│   cerebro-mcp            │◀────┼── Claude Code   │
+│  MCP Clients ────┼────▶│   cerebro-discord         │     │   Cursor        │
+│                  │     │   cerebro-teams           │     └──────────────────┘
+└──────────────────┘     │   cerebro-alexa           │
+                         │   cerebro-digest          │
+                         │                          │
+                         │  OpenRouter (AI gateway)  │
+                         └─────────────────────────┘
+```
+
+---
+
+## Decision Tree
+
+Use this to plan which features you'll set up. **Phase 1 and Phase 2 are required.** Everything else is optional.
+
+```
+START HERE
+    │
+    ▼
+╔═══════════════════════════════════╗
+║  PHASE 1: Core Infrastructure    ║  ◀── REQUIRED
+║  Supabase + OpenRouter + MCP     ║
+║  ~20 minutes                     ║
+╚═══════════════╤═══════════════════╝
+                │
+         ✅ Verify: capture + search
+         ✅ via MCP client works
+                │
+                ▼
+╔═══════════════════════════════════╗
+║  PHASE 2: Capture Source(s)      ║  ◀── AT LEAST ONE REQUIRED
+╠═══════════════════════════════════╣
+║                                   ║
+║  Choose one or more:              ║
+║  ┌───────────┐  ┌───────────┐    ║
+║  │  Discord   │  │  Teams    │    ║
+║  │  (free)    │  │  (O365)   │    ║
+║  └─────┬─────┘  └─────┬─────┘    ║
+║        │               │          ║
+║        ▼               ▼          ║
+║     Optional:                     ║
+║  ┌───────────────────────┐       ║
+║  │  Alexa Voice Capture  │       ║
+║  │  (Amazon account)     │       ║
+║  └───────────────────────┘       ║
+╚═══════════════╤═══════════════════╝
+                │
+         ✅ Verify: capture + search
+         ✅ via chosen source(s)
+                │
+                ▼
+    ┌───── OPTIONAL FEATURES ─────┐
+    │                              │
+    ▼                              │
+╔══════════════════════╗           │
+║  Calendar Reminders  ║           │
+║  O365 / Google Cal   ║           │
+╚══════════╤═══════════╝           │
+           │                       │
+    ✅ Verify: date in             │
+    ✅ capture → event             │
+           │                       │
+           ▼                       │
+╔══════════════════════╗           │
+║  Daily/Weekly Digest ║           │
+║  → Chat channels     ║           │
+╚══════════╤═══════════╝           │
+           │                       │
+    ✅ Verify: manual              │
+    ✅ trigger → delivery          │
+           │                       │
+           ▼                       │
+   ┌───────────────────┐          │
+   │  + Email Delivery │          │
+   │  (Resend — free)  │          │
+   └───────────────────┘          │
+                                   │
+           DONE! ◀─────────────────┘
+```
+
+---
+
+## Master Credential Tracker
+
+Copy this into a text editor and fill it in as you complete each phase. You'll reference these values throughout setup.
+
+```text
+CEREBRO — MASTER CREDENTIAL TRACKER
+Keep this file safe. Fill in as you go.
+════════════════════════════════════════
+
+PHASE 1: CORE INFRASTRUCTURE
+─────────────────────────────
+SUPABASE
+  Account email:       ____________
+  Database password:   ____________
+  Project ref:         ____________
+  Project URL:         ____________
+  Service role key:    ____________
+
+OPENROUTER
+  API key:             ____________
+
+GENERATED
+  MCP Access Key:      ____________
+  MCP Server URL:      ____________
+  MCP Connection URL:  ____________
+
+PHASE 2: CAPTURE SOURCES
+─────────────────────────
+DISCORD (if using)
+  Application ID:      ____________
+  Public Key:          ____________
+  Bot Token:           ____________
+
+TEAMS (if using)
+  App (client) ID:     ____________
+  Client secret:       ____________
+  Tenant ID:           ____________
+  Bot handle:          ____________
+
+ALEXA (if using)
+  Skill ID:            ____________
+  Function URL:        ____________
+
+PHASE 3: CALENDAR REMINDERS
+────────────────────────────
+O365 (if using)
+  GRAPH_TENANT_ID:     ____________
+  GRAPH_CLIENT_ID:     ____________
+  GRAPH_CLIENT_SECRET: ____________
+  CALENDAR_USER_EMAIL: ____________
+
+GOOGLE (if using)
+  GOOGLE_CALENDAR_ID:  ____________
+  Service account JSON: (stored separately)
+
+PHASE 4: DIGEST + EMAIL
+────────────────────────
+RESEND (if using email)
+  API key:             ____________
+  From address:        ____________
+  To address(es):      ____________
+
+════════════════════════════════════════
+```
+
+---
+
+## Phase 1: Core Infrastructure (REQUIRED)
+
+> **What you'll build:** A Supabase database with vector embeddings, an MCP server that lets any AI assistant capture and search your thoughts, and connections to your AI tools.
+
+### Steps
+
+Follow the complete guide: **[Getting Started →](01-getting-started.md)**
+
+This covers:
+1. Create a Supabase project (free tier)
+2. Set up the database (thoughts table, vector search, security)
+3. Get an OpenRouter API key (AI gateway)
+4. Generate an access key
+5. Deploy the MCP server Edge Function
+6. Connect to your AI client (Claude Desktop, ChatGPT, Claude Code, Cursor)
+
+### 🚦 Verification Gate
+
+Do NOT proceed until all of these pass:
+
+| # | Test | Expected Result |
+|---|------|-----------------|
+| 1 | Visit `https://YOUR_REF.supabase.co/functions/v1/cerebro-mcp` in browser | Page loads (not 404/500) |
+| 2 | In your AI client: "Remember this: testing Cerebro setup" | Confirmation with extracted metadata |
+| 3 | In your AI client: "What did I capture about testing?" | Returns the thought you just captured |
+| 4 | Supabase Dashboard → Table Editor → `thoughts` | At least 1 row with `metadata.source = "mcp"` |
+
+✅ **All 4 pass?** Continue to Phase 2.
+
+---
+
+## Phase 2: Capture Sources (AT LEAST ONE REQUIRED)
+
+> **What you'll build:** One or more chat-based entry points so you can capture thoughts from your phone, desktop, or voice — not just your AI coding tools.
+
+Choose at least one capture source. You can add more later.
+
+### Option A: Discord (Recommended Starting Point)
+
+**What you need:** A Discord account (free) and a Discord server you control.
+
+**What you get:** `/capture` and `/search` slash commands that work on desktop, mobile, and web.
+
+Follow the complete guide: **[Discord Setup →](03-discord-capture-setup.md)**
+
+#### 🚦 Verification Gate
+
+| # | Test | Expected Result |
+|---|------|-----------------|
+| 1 | `/capture thought:testing Discord integration` | "Thinking..." → confirmation with metadata |
+| 2 | `/search query:testing` | Returns matching thoughts with similarity scores |
+| 3 | Supabase → `thoughts` table | New row with `metadata.source = "discord"` |
+| 4 | Visit Edge Function URL in browser | `{"status":"ok","service":"cerebro-discord"}` |
+
+---
+
+### Option B: Microsoft Teams
+
+**What you need:** Microsoft 365 tenant with Teams, Azure subscription (Bot is free F0 tier), admin access for sideloading.
+
+**What you get:** DM the bot or @mention it in any Teams channel. Works on desktop, web, iOS, and Android.
+
+Follow the complete guide: **[Teams Setup →](02-teams-capture-setup.md)**
+
+#### 🚦 Verification Gate
+
+| # | Test | Expected Result |
+|---|------|-----------------|
+| 1 | DM the Cerebro bot: "testing Teams integration" | Confirmation reply with extracted metadata |
+| 2 | @mention in a channel: "@Cerebro architecture review" | Threaded reply with confirmation |
+| 3 | Supabase → `thoughts` table | New rows with `metadata.source = "teams"` |
+| 4 | Visit Edge Function URL in browser | `{"status":"ok","service":"cerebro-teams"}` |
+
+---
+
+### Option C: Alexa Voice Capture (Additional)
+
+> **Note:** Alexa is best added alongside Discord or Teams, since it can't receive push notifications (digests). It's great for hands-free capture and queries.
+
+**What you need:** Amazon account (same as your Alexa devices), Alexa Developer Console account (free).
+
+**What you get:** "Alexa, tell cerebro ..." — capture, search, task management, stats, and digest queries by voice.
+
+Follow the complete guide: **[Alexa Setup →](04-alexa-setup.md)**
+
+#### 🚦 Verification Gate
+
+| # | Test | Expected Result |
+|---|------|-----------------|
+| 1 | Simulator: "open cerebro" | "Welcome to Cerebro..." |
+| 2 | Simulator: "tell cerebro I need to buy groceries" | "Captured: I need to buy groceries. Tagged as task." |
+| 3 | Simulator: "ask cerebro about groceries" | "I found 1 result..." |
+| 4 | Supabase → `thoughts` table | New row with `metadata.source = "alexa"` |
+
+---
+
+✅ **At least one capture source verified?** Your Cerebro is fully functional. The features below are optional enhancements.
+
+---
+
+## Phase 3: Calendar Reminders (OPTIONAL)
+
+> **What you'll build:** Automatic calendar event creation when you capture a thought that mentions a future date or time. Works across ALL capture sources.
+
+**What you need:** Office 365 calendar and/or Google Calendar.
+
+**Example:** Saying "remind me to check the deployment logs next Friday at 10am" from any capture source → event appears on your calendar.
+
+Follow the complete guide: **[Reminders Setup →](05-reminders-setup.md)**
+
+### 🚦 Verification Gate
+
+| # | Test | Expected Result |
+|---|------|-----------------|
+| 1 | Capture: "remind me to call the dentist next Wednesday at 5 AM" | Confirmation includes "⏰ Reminder created on ..." |
+| 2 | Check your calendar app | Event appears for next Wednesday at 5:00 AM |
+| 3 | Supabase → thought's `metadata` | Contains `has_reminder: true`, `reminder_title`, `reminder_datetime` |
+| 4 | Capture: "I like PostgreSQL" (no date) | No calendar event created (correctly ignored) |
+
+---
+
+## Phase 4: Daily & Weekly Digest (OPTIONAL)
+
+> **What you'll build:** Automated daily and weekly summaries delivered to your chat channels (Teams, Discord, or both). Optionally adds email delivery.
+
+**What you need:** Core setup + at least one capture source with some thoughts captured.
+
+The daily digest runs every morning (6 AM Central) with a concise summary. The weekly digest runs Sundays (noon Central) with deeper pattern analysis.
+
+Follow the complete guide: **[Digest Setup →](06-daily-digest-setup.md)**
+
+### 🚦 Verification Gate — Channel Delivery
+
+| # | Test | Expected Result |
+|---|------|-----------------|
+| 1 | Capture several thoughts first (need content to summarize) | Multiple rows in `thoughts` table |
+| 2 | `curl -X POST https://YOUR_REF.supabase.co/functions/v1/cerebro-digest -H "Content-Type: application/json" -d '{"period":"daily"}'` | JSON response with `"success": true` |
+| 3 | Check your Discord/Teams channel | Digest message appears |
+| 4 | `select * from digest_channels;` | Rows for your active channels with `enabled = true` |
+| 5 | `select * from cron.job;` | Shows `cerebro-daily-digest` and `cerebro-weekly-digest` |
+
+### Sub-Option: Email Delivery
+
+Want the digest in your inbox too? Add Resend (free — 100 emails/day, 3,000/month).
+
+This is covered in the digest guide under **Email Setup with Resend**.
+
+#### 🚦 Verification Gate — Email
+
+| # | Test | Expected Result |
+|---|------|-----------------|
+| 1 | Set `RESEND_API_KEY`, `DIGEST_EMAIL_TO`, `DIGEST_EMAIL_FROM` | Secrets set successfully |
+| 2 | Manually trigger: `curl -X POST ... -d '{"period":"daily"}'` | JSON shows email delivery in response |
+| 3 | Check your inbox | HTML-styled digest email with gradient header |
+
+---
+
+## You're Done! 🎉
+
+Your Cerebro brain is now operational. Here's what you've built:
+
+| Component | Status |
+|-----------|--------|
+| Core database + vector search | ✅ Required |
+| MCP server for AI tools | ✅ Required |
+| Capture source(s) | ✅ Required (1+) |
+| Calendar reminders | Optional |
+| Daily/weekly digest | Optional |
+| Email delivery | Optional |
+
+### Tips for Daily Use
+
+- **Capture everything** — random thoughts, meeting notes, decisions, ideas. The AI extracts structure automatically.
+- **Search by meaning** — "What did I decide about the database?" finds thoughts about PostgreSQL choices even if you never said "database."
+- **Mix sources** — capture from Discord on your phone, Teams on your desktop, Alexa while walking. It all goes to the same brain.
+- **Review your digests** — the weekly digest surfaces patterns you might miss day-to-day.
+
+---
+
+## Appendix A: Full Environment Variable Reference
+
+| Variable | Set In | Used By | Required |
+|----------|--------|---------|----------|
+| `MCP_ACCESS_KEY` | Phase 1 | MCP server | Yes |
+| `OPENROUTER_API_KEY` | Phase 1 | All functions | Yes |
+| `DISCORD_PUBLIC_KEY` | Phase 2 | Discord capture | If using Discord |
+| `DISCORD_BOT_TOKEN` | Phase 2 | Discord capture + Digest | If using Discord |
+| `TEAMS_BOT_APP_ID` | Phase 2 | Teams capture + Digest | If using Teams |
+| `TEAMS_BOT_APP_SECRET` | Phase 2 | Teams capture + Digest | If using Teams |
+| `ALEXA_SKILL_ID` | Phase 2 | Alexa capture | Recommended |
+| `GRAPH_TENANT_ID` | Phase 3 | Calendar reminders | If using O365 cal |
+| `GRAPH_CLIENT_ID` | Phase 3 | Calendar reminders | If using O365 cal |
+| `GRAPH_CLIENT_SECRET` | Phase 3 | Calendar reminders | If using O365 cal |
+| `CALENDAR_USER_EMAIL` | Phase 3 | Calendar reminders | If using O365 cal |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Phase 3 | Calendar reminders | If using Google cal |
+| `GOOGLE_CALENDAR_ID` | Phase 3 | Calendar reminders | If using Google cal |
+| `RESEND_API_KEY` | Phase 4 | Digest email | If using email |
+| `DIGEST_EMAIL_TO` | Phase 4 | Digest email | If using email |
+| `DIGEST_EMAIL_FROM` | Phase 4 | Digest email | If using email |
+
+> **Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in all Supabase Edge Functions.
+
+---
+
+## Appendix B: Troubleshooting Quick Reference
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| 404 on Edge Function URL | Function not deployed | `supabase functions deploy <name> --no-verify-jwt` |
+| 401 from MCP server | Wrong access key | Check `MCP_ACCESS_KEY` matches your URL `?key=` param |
+| Tools don't appear in Claude | Connector not added | Settings → Connectors → add the MCP Connection URL |
+| Discord commands missing | Propagation delay | Global commands take up to 1 hour; use guild-specific for instant |
+| Teams bot no reply | Wrong messaging endpoint | Azure Bot → Configuration → verify URL matches function |
+| Alexa "problem with skill" | Function error | `supabase functions logs cerebro-alexa --project-ref YOUR_REF` |
+| Calendar event not created | Missing credentials | `supabase secrets list` — check GRAPH_* or GOOGLE_* vars |
+| Digest not delivered | No registered channels | Capture a thought from Teams/Discord first to auto-register |
+| Cron not firing | Extensions disabled | Enable `pg_cron` and `pg_net` in Supabase Dashboard |
+| Email not received | Resend domain restriction | Default `onboarding@resend.dev` only sends to account owner |
+
+---
+
+## Appendix C: Edge Functions Reference
+
+| Function | Endpoint | Deploy Command |
+|----------|----------|---------------|
+| MCP Server | `cerebro-mcp` | `supabase functions deploy cerebro-mcp --no-verify-jwt` |
+| Discord | `cerebro-discord` | `supabase functions deploy cerebro-discord --no-verify-jwt` |
+| Teams | `cerebro-teams` | `supabase functions deploy cerebro-teams --no-verify-jwt` |
+| Alexa | `cerebro-alexa` | `supabase functions deploy cerebro-alexa --no-verify-jwt` |
+| Digest | `cerebro-digest` | `supabase functions deploy cerebro-digest --no-verify-jwt` |
+
+**Redeploy all functions after code changes:**
+
+```bash
+supabase functions deploy cerebro-mcp --no-verify-jwt && \
+supabase functions deploy cerebro-discord --no-verify-jwt && \
+supabase functions deploy cerebro-teams --no-verify-jwt && \
+supabase functions deploy cerebro-alexa --no-verify-jwt && \
+supabase functions deploy cerebro-digest --no-verify-jwt
+```

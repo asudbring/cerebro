@@ -395,9 +395,24 @@ Edit the model strings in `index.ts` and redeploy. Browse models at [openrouter.
 
 ---
 
+## ✅ Verification Checklist
+
+Before moving on, confirm all of these pass:
+
+- [ ] **Supabase Dashboard** → Table Editor shows `thoughts` table with 6 columns (id, content, embedding, metadata, created_at, updated_at)
+- [ ] **Supabase Dashboard** → Database → Functions shows `match_thoughts`
+- [ ] **Edge Function responds** — visiting `https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp` in a browser returns a page (not a 404 or 500)
+- [ ] **Capture works** — in your AI client, say "Remember this: Sarah mentioned she's thinking about leaving her job to start a consulting business" → you get a confirmation with metadata (topics, people, type)
+- [ ] **Search works** — ask "What did I capture about Sarah?" → returns the thought you just captured with a similarity score
+- [ ] **Supabase data** — Table Editor → `thoughts` shows at least one row with `metadata.source` = `"mcp"` and a non-null `embedding`
+
+> If any check fails, see the **Troubleshooting** section above.
+
+---
+
 ## Next Steps
 
-Once your MCP server is working, you can add more ways to capture thoughts:
+Once your MCP server is working, you can add more ways to capture thoughts. See the **[Cerebro Setup Guide](SETUP.md)** for the recommended order, or jump directly:
 
 | Integration | Guide | What It Does |
 | ----------- | ----- | ------------ |

@@ -228,6 +228,20 @@ This returns a spoken summary of the last 24 hours — separate from the schedul
 
 ---
 
+## ✅ Verification Checklist
+
+Before moving on, confirm all of these pass:
+
+- [ ] **Manual daily trigger** — `curl -X POST ... -d '{"period":"daily"}'` returns a JSON response with `"success": true` and a digest summary
+- [ ] **Channel delivery** — the digest message appears in your Teams conversation and/or Discord channel
+- [ ] **Channel registration** — `select * from digest_channels;` shows rows for your active channels with `enabled = true`
+- [ ] **Cron jobs exist** — `select * from cron.job;` shows `cerebro-daily-digest` and `cerebro-weekly-digest`
+- [ ] **(If email configured)** — the digest email arrives in your inbox with a styled HTML layout
+
+> If any check fails, see Step 5 **Monitor & Troubleshoot** below.
+
+---
+
 ## Step 4: Manage Digest Channels
 
 ### View registered channels
