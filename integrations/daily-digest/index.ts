@@ -410,22 +410,79 @@ function splitMessage(text: string, maxLen: number): string[] {
 // --- Channel Delivery: Email via Resend ---
 
 function markdownToHtml(markdown: string, title: string): string {
-  // Convert markdown to styled HTML email
-  let html = markdown
+  // Process block-level elements first, then inline
+  const lines = markdown.split("\n");
+  const outputLines: string[] = [];
+  let inUl = false;
+  let inOl = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Horizontal rule
+    if (/^---+$/.test(trimmed)) {
+      if (inUl) { outputLines.push("</ul>"); inUl = false; }
+      if (inOl) { outputLines.push("</ol>"); inOl = false; }
+      outputLines.push('<hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;">');
+      continue;
+    }
+
     // Headers
-    .replace(/^### (.+)$/gm, '<h3 style="color:#4a5568;margin:18px 0 8px;font-size:16px;">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="color:#2d3748;margin:22px 0 10px;font-size:18px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">$1</h2>')
-    // Bold
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    // Italic
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    // Unordered list items
-    .replace(/^- (.+)$/gm, '<li style="margin:4px 0;">$1</li>')
-    // Wrap consecutive <li> in <ul>
-    .replace(/((?:<li[^>]*>.*<\/li>\s*)+)/g, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>')
-    // Line breaks for remaining plain text
-    .replace(/\n\n/g, "</p><p>")
-    .replace(/\n/g, "<br>");
+    if (trimmed.startsWith("### ")) {
+      if (inUl) { outputLines.push("</ul>"); inUl = false; }
+      if (inOl) { outputLines.push("</ol>"); inOl = false; }
+      outputLines.push(`<h3 style="color:#4a5568;margin:18px 0 8px;font-size:16px;">${inlineMarkdown(trimmed.slice(4))}</h3>`);
+      continue;
+    }
+    if (trimmed.startsWith("## ")) {
+      if (inUl) { outputLines.push("</ul>"); inUl = false; }
+      if (inOl) { outputLines.push("</ol>"); inOl = false; }
+      outputLines.push(`<h2 style="color:#2d3748;margin:22px 0 10px;font-size:18px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">${inlineMarkdown(trimmed.slice(3))}</h2>`);
+      continue;
+    }
+    if (trimmed.startsWith("# ")) {
+      if (inUl) { outputLines.push("</ul>"); inUl = false; }
+      if (inOl) { outputLines.push("</ol>"); inOl = false; }
+      outputLines.push(`<h2 style="color:#2d3748;margin:22px 0 10px;font-size:20px;">${inlineMarkdown(trimmed.slice(2))}</h2>`);
+      continue;
+    }
+
+    // Unordered list items (- or *)
+    const ulMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (ulMatch) {
+      if (inOl) { outputLines.push("</ol>"); inOl = false; }
+      if (!inUl) { outputLines.push('<ul style="padding-left:20px;margin:8px 0;">'); inUl = true; }
+      outputLines.push(`<li style="margin:4px 0;">${inlineMarkdown(ulMatch[1])}</li>`);
+      continue;
+    }
+
+    // Ordered list items (1. 2. etc)
+    const olMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (olMatch) {
+      if (inUl) { outputLines.push("</ul>"); inUl = false; }
+      if (!inOl) { outputLines.push('<ol style="padding-left:20px;margin:8px 0;">'); inOl = true; }
+      outputLines.push(`<li style="margin:4px 0;">${inlineMarkdown(olMatch[1])}</li>`);
+      continue;
+    }
+
+    // Close any open lists
+    if (inUl) { outputLines.push("</ul>"); inUl = false; }
+    if (inOl) { outputLines.push("</ol>"); inOl = false; }
+
+    // Empty line = paragraph break
+    if (trimmed === "") {
+      outputLines.push('<div style="margin:12px 0;"></div>');
+      continue;
+    }
+
+    // Regular paragraph
+    outputLines.push(`<p style="margin:6px 0;">${inlineMarkdown(trimmed)}</p>`);
+  }
+
+  if (inUl) outputLines.push("</ul>");
+  if (inOl) outputLines.push("</ol>");
+
+  const html = outputLines.join("\n");
 
   return `<!DOCTYPE html>
 <html>
@@ -436,7 +493,7 @@ function markdownToHtml(markdown: string, title: string): string {
       <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;">${escapeHtml(title)}</h1>
     </div>
     <div style="padding:28px 32px;color:#2d3748;font-size:15px;line-height:1.7;">
-      <p>${html}</p>
+      ${html}
     </div>
     <div style="padding:16px 32px;background:#f7fafc;border-top:1px solid #e2e8f0;text-align:center;color:#a0aec0;font-size:12px;">
       Cerebro — Your AI-powered knowledge brain
@@ -444,6 +501,21 @@ function markdownToHtml(markdown: string, title: string): string {
   </div>
 </body>
 </html>`;
+}
+
+function inlineMarkdown(text: string): string {
+  return text
+    // Bold (must come before italic)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    // Italic
+    .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>")
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code style="background:#edf2f7;padding:2px 5px;border-radius:3px;font-size:13px;">$1</code>')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#667eea;">$1</a>')
+    // Arrow entities
+    .replace(/→/g, "→")
+    .replace(/←/g, "←");
 }
 
 function escapeHtml(text: string): string {
