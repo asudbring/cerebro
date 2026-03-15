@@ -35,16 +35,24 @@ Set via `supabase secrets set`:
 | `DISCORD_PUBLIC_KEY` | Discord Developer Portal | Application public key (for signature verification) |
 | `DISCORD_BOT_TOKEN` | Discord Developer Portal | Bot token (for registering slash commands) |
 
+## Features
+
+- **Calendar reminders** — When a captured thought mentions a future date/time, automatically creates events on O365 and/or Google Calendar. See [Reminders Setup](../../docs/05-reminders-setup.md).
+
 ## Metadata
 
 Captured thoughts include Discord-specific metadata:
 
 ```json
 {
-  "type": "idea",
+  "title": "Use event-driven architecture",
+  "type": "decision",
   "topics": ["architecture", "design"],
   "people": [],
   "action_items": [],
+  "has_reminder": false,
+  "reminder_title": "",
+  "reminder_datetime": "",
   "source": "discord",
   "discord_sender": "username"
 }

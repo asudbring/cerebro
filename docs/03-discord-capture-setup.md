@@ -209,3 +209,11 @@ Open Supabase Dashboard → Table Editor → `thoughts`. New rows should have `m
 **"Application did not respond" error**
 
 - The Edge Function must respond within 3 seconds. The deferred response pattern (type 5) handles this — if you see this error, the function may not be receiving requests at all. Check the interactions endpoint URL.
+
+---
+
+## Calendar Reminders
+
+When you capture a thought that mentions a future date or time (e.g. `/capture thought:call the dentist tomorrow at 2pm`), Cerebro can automatically create calendar events on O365 and/or Google Calendar.
+
+See **[Reminders Setup](05-reminders-setup.md)** for configuration instructions.

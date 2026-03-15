@@ -33,16 +33,24 @@ Set via `supabase secrets set`:
 | `TEAMS_BOT_APP_ID` | Entra ID app registration | Application (client) ID |
 | `TEAMS_BOT_APP_SECRET` | Entra ID app registration | Client secret value |
 
+## Features
+
+- **Calendar reminders** — When a captured thought mentions a future date/time, automatically creates events on O365 and/or Google Calendar. See [Reminders Setup](../../docs/05-reminders-setup.md).
+
 ## Metadata
 
 Captured thoughts include Teams-specific metadata:
 
 ```json
 {
-  "type": "idea",
-  "topics": ["project-planning", "architecture"],
+  "title": "Architecture review with platform team",
+  "type": "meeting_note",
+  "topics": ["architecture", "platform"],
   "people": ["Sarah"],
   "action_items": [],
+  "has_reminder": false,
+  "reminder_title": "",
+  "reminder_datetime": "",
   "source": "teams",
   "teams_sender": "Allen Sudbring",
   "teams_conversation_id": "..."
