@@ -33,6 +33,8 @@ The setup guide covers:
 6. **Task Management** — Complete, reopen, and delete tasks with natural language
 
 > **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md) · [File Attachments](docs/07-file-attachments-setup.md) · [Task Management](docs/08-task-management-setup.md)
+>
+> **🤖 Using an AI coding tool?** [AI-Guided Setup](docs/09-ai-guided-setup.md) — Let your AI walk you through the deployment step by step.
 
 ### What You Need
 
