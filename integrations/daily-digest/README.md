@@ -1,25 +1,45 @@
-# Daily Digest
+# Daily & Weekly Digest
 
 Automated daily and weekly summaries of your captured thoughts, delivered to Teams and Discord channels.
 
 ## How It Works
 
-1. **pg_cron** triggers the Edge Function on a schedule (daily at 6 AM Central, weekly on Sunday)
-2. **Data collection** — queries yesterday's thoughts, completed tasks, and upcoming reminders in parallel
+1. **pg_cron** triggers the Edge Function on a schedule (daily at 6 AM Central, weekly on Sunday noon)
+2. **Data collection** — queries thoughts, completed tasks, and upcoming reminders in parallel
 3. **LLM summarization** — sends structured data to OpenRouter (GPT-4o-mini) with tailored prompts
 4. **Delivery** — posts the digest to all registered Teams conversations and Discord channels
 
 Channels are auto-registered on first capture — no manual setup required.
 
+## Daily vs Weekly
+
+| Aspect | Daily | Weekly |
+| ------ | ----- | ------ |
+| **Schedule** | Every day 6 AM Central | Sundays 12 PM Central |
+| **Lookback** | 24 hours | 7 days |
+| **Reminder window** | 48 hours ahead | 7 days ahead |
+| **Focus** | Themes, actions, people, reminders | Recurring patterns, goal progress, trends, stats |
+| **Length** | 200-400 words | 400-600 words |
+| **Data** | Thoughts + reminders | Thoughts + completed tasks + reminders + aggregate stats |
+
 ## Digest Content
 
 The AI-generated summary includes:
 
-- **Key themes** and decisions made
-- **Action items** — open and completed
-- **People** mentioned and follow-ups needed
-- **Upcoming reminders** (next 48 hours)
-- **Insights** and things learned
+### Daily
+- Key themes and decisions made
+- Action items — open and completed
+- People mentioned and follow-ups needed
+- Upcoming reminders (next 48 hours)
+- Insights and things learned
+
+### Weekly (additional analysis)
+- Recurring themes and emerging patterns
+- Progress on goals — completed tasks vs open items
+- People and relationship touchpoints across the week
+- Key decisions and their context
+- Week stats: type breakdown, source breakdown, busiest day
+- Forward-looking observations for the week ahead
 
 ## Environment Variables
 
@@ -61,8 +81,9 @@ Managed via `pg_cron` — see [`schemas/core/003-digest-cron.sql`](../../schemas
 Alexa can't receive push notifications. Instead, users ask on-demand:
 
 > "Alexa, ask cerebro for my daily digest"
+> "Alexa, ask cerebro for my weekly digest"
 
-This returns a spoken summary of the last 24 hours directly from the database.
+These return spoken summaries directly from the database (daily = last 24h, weekly = last 7 days).
 
 ## Setup
 

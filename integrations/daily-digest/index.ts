@@ -71,6 +71,21 @@ async function getThoughtsSince(since: Date): Promise<ThoughtRow[]> {
   return data || [];
 }
 
+async function getCompletedThoughtsSince(since: Date): Promise<ThoughtRow[]> {
+  const { data, error } = await supabase
+    .from("thoughts")
+    .select("id, content, metadata, created_at")
+    .eq("metadata->>status", "done")
+    .gte("created_at", since.toISOString())
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching completed tasks:", error);
+    return [];
+  }
+  return data || [];
+}
+
 async function getUpcomingReminders(withinHours: number): Promise<ThoughtRow[]> {
   const future = new Date(Date.now() + withinHours * 60 * 60 * 1000);
   const { data, error } = await supabase
@@ -106,24 +121,52 @@ Keep it concise but insightful — aim for 200-400 words.
 If there are no thoughts, say so briefly and encouragingly.`;
   }
 
-  return `You are Cerebro, a personal knowledge brain assistant. Analyze the past week's thoughts.
+  return `You are Cerebro, a personal knowledge brain assistant. Analyze the past week's thoughts and produce a comprehensive weekly review.
 
-Identify:
-- **Recurring themes** and patterns
-- **Progress on goals** and projects
-- **Key people** and relationship touchpoints
-- **Decisions** made and their context
-- **Open items** that need attention
+Your analysis should include:
 
-Format as markdown suitable for a chat message. Keep it concise but insightful.`;
+### 🔄 Recurring Themes & Patterns
+- What topics or ideas kept coming up this week?
+- Are there emerging patterns in the types of thoughts captured?
+
+### 📈 Progress on Goals & Projects
+- What projects or goals saw movement this week?
+- What tasks were completed vs what remains open?
+- Where is momentum building, and where has it stalled?
+
+### 👥 People & Relationships
+- Who was mentioned most this week? In what context?
+- Are there follow-ups or conversations needed?
+- Note any collaboration patterns or relationship touchpoints.
+
+### 🧠 Key Decisions & Insights
+- What decisions were made and why?
+- What new insights or learnings emerged?
+- Were there any "aha moments" worth revisiting?
+
+### ⚠️ Open Items & Attention Needed
+- What action items are still unresolved?
+- Are there reminders or deadlines in the coming week?
+- What deserves attention in the week ahead?
+
+### 📊 Week at a Glance
+- Total thoughts captured and breakdown by type
+- Most active capture source (Teams, Discord, Alexa, MCP)
+- Busiest day of the week
+
+Format as markdown suitable for a chat message. Use emoji for section headers.
+Be thorough but scannable — aim for 400-600 words.
+End with 1-2 sentences of encouragement or a forward-looking observation.
+If data is sparse, note it and focus on what IS there.`;
 }
 
 async function generateDigestContent(
   thoughts: ThoughtRow[],
+  completed: ThoughtRow[],
   reminders: ThoughtRow[],
   period: "daily" | "weekly",
 ): Promise<string> {
-  if (thoughts.length === 0 && reminders.length === 0) {
+  if (thoughts.length === 0 && completed.length === 0 && reminders.length === 0) {
     const timeframe = period === "daily" ? "yesterday" : "this week";
     return `📭 **No thoughts captured ${timeframe}.**\n\nTip: Capture thoughts from Teams, Discord, Alexa, or any MCP client to see them in your digest.`;
   }
@@ -144,10 +187,24 @@ async function generateDigestContent(
           ? `\n  Actions: ${(m.action_items as string[]).join("; ")}`
           : "";
         const source = m.source ? ` (via ${m.source})` : "";
-        return `- [${type}] ${title}${people}${source}: ${t.content.substring(0, 200)}${actions}`;
+        const date = new Date(t.created_at).toLocaleDateString("en-US", {
+          weekday: "short", month: "short", day: "numeric",
+        });
+        return `- [${type}] ${title}${people}${source} (${date}): ${t.content.substring(0, 200)}${actions}`;
       })
       .join("\n");
     sections.push(`## Captured Thoughts (${thoughts.length})\n${thoughtList}`);
+  }
+
+  if (completed.length > 0) {
+    const completedList = completed
+      .map((t) => {
+        const m = t.metadata || {};
+        const title = m.title || t.content.substring(0, 80);
+        return `- ✅ ${title}`;
+      })
+      .join("\n");
+    sections.push(`## Completed Tasks (${completed.length})\n${completedList}`);
   }
 
   if (reminders.length > 0) {
@@ -158,6 +215,39 @@ async function generateDigestContent(
       })
       .join("\n");
     sections.push(`## Upcoming Reminders\n${reminderList}`);
+  }
+
+  // For weekly: add aggregate stats to help the LLM
+  if (period === "weekly" && thoughts.length > 0) {
+    const byType: Record<string, number> = {};
+    const bySource: Record<string, number> = {};
+    const byDay: Record<string, number> = {};
+    const allPeople = new Set<string>();
+
+    for (const t of thoughts) {
+      const m = t.metadata || {};
+      const type = (m.type as string) || "thought";
+      const source = (m.source as string) || "unknown";
+      const day = new Date(t.created_at).toLocaleDateString("en-US", { weekday: "long" });
+
+      byType[type] = (byType[type] || 0) + 1;
+      bySource[source] = (bySource[source] || 0) + 1;
+      byDay[day] = (byDay[day] || 0) + 1;
+
+      if (Array.isArray(m.people)) {
+        for (const p of m.people) allPeople.add(p as string);
+      }
+    }
+
+    const statsLines = [
+      `Types: ${Object.entries(byType).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}(${v})`).join(", ")}`,
+      `Sources: ${Object.entries(bySource).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}(${v})`).join(", ")}`,
+      `By day: ${Object.entries(byDay).map(([k, v]) => `${k}(${v})`).join(", ")}`,
+    ];
+    if (allPeople.size > 0) {
+      statsLines.push(`People mentioned: ${Array.from(allPeople).join(", ")}`);
+    }
+    sections.push(`## Week Stats\n${statsLines.join("\n")}`);
   }
 
   const userMessage = sections.join("\n\n");
@@ -384,12 +474,14 @@ async function deliverDigest(
 
 async function runDigest(period: "daily" | "weekly" = "daily"): Promise<DigestResult> {
   const hours = period === "daily" ? 24 : 168;
+  const reminderHours = period === "daily" ? 48 : 168;
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
   // Collect data in parallel
-  const [thoughts, reminders, channels] = await Promise.all([
+  const [thoughts, completed, reminders, channels] = await Promise.all([
     getThoughtsSince(since),
-    getUpcomingReminders(48),
+    getCompletedThoughtsSince(since),
+    getUpcomingReminders(reminderHours),
     getDigestChannels(),
   ]);
 
@@ -402,7 +494,7 @@ async function runDigest(period: "daily" | "weekly" = "daily"): Promise<DigestRe
   });
   const title = `🧠 Cerebro ${period === "daily" ? "Daily" : "Weekly"} Digest — ${dateStr}`;
 
-  const aiSummary = await generateDigestContent(thoughts, reminders, period);
+  const aiSummary = await generateDigestContent(thoughts, completed, reminders, period);
   const fullDigest = `**${title}**\n\n${aiSummary}`;
 
   // Deliver to registered channels

@@ -108,6 +108,22 @@
           ]
         },
         {
+          "name": "WeeklyDigestIntent",
+          "slots": [],
+          "samples": [
+            "weekly digest",
+            "give me my weekly digest",
+            "weekly summary",
+            "weekly review",
+            "week in review",
+            "how was my week",
+            "what happened this week",
+            "weekly briefing",
+            "weekly recap",
+            "recap my week"
+          ]
+        },
+        {
           "name": "BrowseRecentIntent",
           "slots": [
             {
