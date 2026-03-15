@@ -19,6 +19,7 @@ const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 // Teams bot credentials (optional — only needed if delivering to Teams)
 const TEAMS_BOT_APP_ID = Deno.env.get("TEAMS_BOT_APP_ID");
 const TEAMS_BOT_APP_SECRET = Deno.env.get("TEAMS_BOT_APP_SECRET");
+const TEAMS_BOT_TENANT_ID = Deno.env.get("TEAMS_BOT_TENANT_ID");
 
 // Discord bot token (optional — only needed if delivering to Discord)
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN");
@@ -29,8 +30,9 @@ const DIGEST_EMAIL_TO = Deno.env.get("DIGEST_EMAIL_TO"); // recipient address(es
 const DIGEST_EMAIL_FROM = Deno.env.get("DIGEST_EMAIL_FROM") || "Cerebro <onboarding@resend.dev>"; // default uses Resend test domain
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const BF_TOKEN_URL =
-  "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token";
+const BF_TOKEN_URL = TEAMS_BOT_TENANT_ID
+  ? `https://login.microsoftonline.com/${TEAMS_BOT_TENANT_ID}/oauth2/v2.0/token`
+  : "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
