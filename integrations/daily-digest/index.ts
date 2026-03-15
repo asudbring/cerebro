@@ -23,6 +23,11 @@ const TEAMS_BOT_APP_SECRET = Deno.env.get("TEAMS_BOT_APP_SECRET");
 // Discord bot token (optional — only needed if delivering to Discord)
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN");
 
+// Email delivery via Resend (optional — free tier: 100 emails/day)
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+const DIGEST_EMAIL_TO = Deno.env.get("DIGEST_EMAIL_TO"); // recipient address(es), comma-separated
+const DIGEST_EMAIL_FROM = Deno.env.get("DIGEST_EMAIL_FROM") || "Cerebro <onboarding@resend.dev>"; // default uses Resend test domain
+
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const BF_TOKEN_URL =
   "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token";
@@ -398,6 +403,89 @@ function splitMessage(text: string, maxLen: number): string[] {
   return chunks;
 }
 
+// --- Channel Delivery: Email via Resend ---
+
+function markdownToHtml(markdown: string, title: string): string {
+  // Convert markdown to styled HTML email
+  let html = markdown
+    // Headers
+    .replace(/^### (.+)$/gm, '<h3 style="color:#4a5568;margin:18px 0 8px;font-size:16px;">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="color:#2d3748;margin:22px 0 10px;font-size:18px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">$1</h2>')
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    // Italic
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    // Unordered list items
+    .replace(/^- (.+)$/gm, '<li style="margin:4px 0;">$1</li>')
+    // Wrap consecutive <li> in <ul>
+    .replace(/((?:<li[^>]*>.*<\/li>\s*)+)/g, '<ul style="padding-left:20px;margin:8px 0;">$1</ul>')
+    // Line breaks for remaining plain text
+    .replace(/\n\n/g, "</p><p>")
+    .replace(/\n/g, "<br>");
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f7fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;margin-top:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:28px 32px;">
+      <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:600;">${escapeHtml(title)}</h1>
+    </div>
+    <div style="padding:28px 32px;color:#2d3748;font-size:15px;line-height:1.7;">
+      <p>${html}</p>
+    </div>
+    <div style="padding:16px 32px;background:#f7fafc;border-top:1px solid #e2e8f0;text-align:center;color:#a0aec0;font-size:12px;">
+      Cerebro — Your AI-powered knowledge brain
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function sendDigestEmail(
+  title: string,
+  markdownContent: string,
+): Promise<boolean> {
+  if (!RESEND_API_KEY || !DIGEST_EMAIL_TO) return false;
+
+  const htmlBody = markdownToHtml(markdownContent, title);
+  const recipients = DIGEST_EMAIL_TO.split(",").map((e) => e.trim());
+
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: DIGEST_EMAIL_FROM,
+        to: recipients,
+        subject: title,
+        html: htmlBody,
+      }),
+    });
+
+    if (!r.ok) {
+      const msg = await r.text().catch(() => "");
+      console.error(`Resend email failed: ${r.status} ${msg}`);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Email delivery error:", err);
+    return false;
+  }
+}
+
 // --- Delivery Orchestration ---
 
 async function getDigestChannels(): Promise<DigestChannel[]> {
@@ -416,6 +504,8 @@ async function getDigestChannels(): Promise<DigestChannel[]> {
 async function deliverDigest(
   channels: DigestChannel[],
   digestText: string,
+  title: string,
+  aiSummary: string,
 ): Promise<string[]> {
   const delivered: string[] = [];
 
@@ -426,7 +516,7 @@ async function deliverDigest(
     (ch) => ch.source === "discord" && ch.discord_channel_id,
   );
 
-  // Deliver to all channels in parallel
+  // Deliver to all channels + email in parallel
   const deliveryPromises: Promise<void>[] = [];
 
   for (const ch of teamsChannels) {
@@ -445,6 +535,16 @@ async function deliverDigest(
       sendDiscordMessage(ch.discord_channel_id!, digestText)
         .then((ok) => {
           if (ok) delivered.push(`discord:${ch.discord_channel_id}`);
+        }),
+    );
+  }
+
+  // Email delivery via Resend
+  if (RESEND_API_KEY && DIGEST_EMAIL_TO) {
+    deliveryPromises.push(
+      sendDigestEmail(title, aiSummary)
+        .then((ok) => {
+          if (ok) delivered.push(`email:${DIGEST_EMAIL_TO}`);
         }),
     );
   }
@@ -498,7 +598,7 @@ async function runDigest(period: "daily" | "weekly" = "daily"): Promise<DigestRe
   const fullDigest = `**${title}**\n\n${aiSummary}`;
 
   // Deliver to registered channels
-  const deliveredTo = await deliverDigest(channels, fullDigest);
+  const deliveredTo = await deliverDigest(channels, fullDigest, title, aiSummary);
 
   return {
     title,
