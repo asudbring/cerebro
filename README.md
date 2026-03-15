@@ -29,8 +29,9 @@ The setup guide covers:
 2. **Capture Sources** — Discord, Teams, and/or Alexa
 3. **Calendar Reminders** — Auto-create O365/Google events from dates in thoughts
 4. **Daily & Weekly Digest** — AI summaries to chat channels + email
+5. **File Attachments** — AI vision scanning of images, PDFs, and documents
 
-> **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md)
+> **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md) · [File Attachments](docs/07-file-attachments-setup.md)
 
 ### What You Need
 
@@ -47,6 +48,7 @@ The setup guide covers:
   - `list_thoughts` — Browse recent with filters
   - `thought_stats` — Summary statistics
   - `capture_thought` — Save with auto-embedding + metadata extraction
+- **Supabase Storage** — File attachments with signed URLs (1 GB free)
 - **Access key auth** — Simple, secure, no OAuth complexity
 
 ## Capture Sources
@@ -75,6 +77,18 @@ When you mention a date or time in a captured thought, Cerebro automatically cre
 **[→ Reminders Setup](docs/05-reminders-setup.md)**
 
 Example: "remind me to call the dentist next Wednesday at 5 AM" → creates a calendar event for Wed 5:00 AM.
+
+### File Attachments
+
+Send images, PDFs, and documents to any capture channel. Cerebro uses AI vision
+to scan and extract content, then optionally stores the file in Supabase Storage.
+
+- 📷 Image OCR and description via gpt-4o-mini
+- 📄 PDF and document text extraction
+- 💾 Optional file storage (1 GB free on Supabase)
+- 🔍 Search and filter thoughts by file attachment
+
+**[→ File Attachments Setup](docs/07-file-attachments-setup.md)**
 
 ## Project Structure
 

@@ -125,6 +125,35 @@ async function replyToActivity(
   }
 }
 
+// --- Reply with Adaptive Card ---
+
+async function replyWithAdaptiveCard(
+  serviceUrl: string,
+  conversationId: string,
+  activityId: string,
+  cardBody: unknown,
+): Promise<string | null> {
+  const token = await getBotToken();
+  const url = `${serviceUrl}v3/conversations/${conversationId}/activities/${activityId}`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      type: "message",
+      attachments: [{
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: cardBody,
+      }],
+    }),
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  return data.id || null;
+}
+
 // --- OpenRouter: Embedding + Metadata ---
 
 async function getEmbedding(text: string): Promise<number[]> {
@@ -351,6 +380,196 @@ function stripBotMention(text: string, botName?: string): string {
   return cleaned;
 }
 
+// --- File Attachment Helpers ---
+
+const MIME_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  doc: "application/msword",
+  txt: "text/plain",
+  csv: "text/csv",
+};
+
+function mimeFromExtension(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  return MIME_TYPES[ext] || "application/octet-stream";
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+async function analyzeFileWithVision(
+  base64Data: string,
+  contentType: string,
+  fileName: string,
+): Promise<{ description: string; fileType: string }> {
+  const isImage = contentType.startsWith("image/");
+
+  if (isImage) {
+    try {
+      const dataUri = `data:${contentType};base64,${base64Data}`;
+      const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          max_tokens: 1000,
+          temperature: 0.2,
+          messages: [{
+            role: "user",
+            content: [
+              { type: "image_url", image_url: { url: dataUri } },
+              {
+                type: "text",
+                text:
+                  "Describe this image in detail. If there is any text visible (OCR), transcribe it. Be thorough but concise.",
+              },
+            ],
+          }],
+        }),
+      });
+      if (!r.ok) {
+        console.error("Vision API error:", await r.text().catch(() => ""));
+        return { description: `Image file: ${fileName}`, fileType: "image" };
+      }
+      const d = await r.json();
+      return {
+        description:
+          d.choices?.[0]?.message?.content || `Image file: ${fileName}`,
+        fileType: "image",
+      };
+    } catch (err) {
+      console.error("Vision analysis failed:", err);
+      return { description: `Image file: ${fileName}`, fileType: "image" };
+    }
+  }
+
+  if (contentType === "application/pdf") {
+    return {
+      description:
+        `PDF document: ${fileName}. File has been saved to storage for reference.`,
+      fileType: "pdf",
+    };
+  }
+
+  if (
+    contentType ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    contentType === "application/msword"
+  ) {
+    return {
+      description:
+        `Word document: ${fileName}. File has been saved to storage for reference.`,
+      fileType: "document",
+    };
+  }
+
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  const fileType = ["csv", "txt"].includes(ext) ? "text" : "file";
+  return { description: `File attached: ${fileName}`, fileType };
+}
+
+async function uploadToStorage(
+  buffer: ArrayBuffer,
+  filename: string,
+  contentType: string,
+): Promise<{ url: string | null; storagePath: string }> {
+  const sanitizedName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storagePath = `teams/${Date.now()}_${sanitizedName}`;
+  const { error } = await supabase.storage
+    .from("cerebro-files")
+    .upload(storagePath, buffer, { contentType });
+  if (error) {
+    console.error("Storage upload error:", error);
+    return { url: null, storagePath };
+  }
+  const { data: urlData } = await supabase.storage
+    .from("cerebro-files")
+    .createSignedUrl(storagePath, 365 * 24 * 60 * 60);
+  return { url: urlData?.signedUrl || null, storagePath };
+}
+
+// deno-lint-ignore no-explicit-any
+function getFileAttachments(attachments: any[]): any[] {
+  if (!attachments) return [];
+  return attachments.filter((att) =>
+    att.contentType ===
+      "application/vnd.microsoft.teams.file.download.info" ||
+    att.contentType?.startsWith("image/") ||
+    (att.contentType?.startsWith("application/") &&
+      att.contentType !== "application/vnd.microsoft.card.adaptive") ||
+    att.contentUrl?.includes("sharepoint.com")
+  );
+}
+
+function buildFileCard(
+  fileName: string,
+  fileDescription: string,
+  thoughtType: string,
+  topics: string[],
+  thoughtId: string,
+  storagePath: string,
+): unknown {
+  return {
+    type: "AdaptiveCard",
+    $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+    version: "1.4",
+    body: [
+      {
+        type: "TextBlock",
+        text: `✅ Captured as **${thoughtType}**${
+          topics.length ? ` — ${topics.join(", ")}` : ""
+        }`,
+        wrap: true,
+      },
+      {
+        type: "TextBlock",
+        text: `📎 **${fileName}**`,
+        wrap: true,
+        weight: "Bolder",
+      },
+      {
+        type: "TextBlock",
+        text: fileDescription.slice(0, 500),
+        wrap: true,
+        size: "Small",
+      },
+      {
+        type: "TextBlock",
+        text: "💾 File saved to Cerebro storage.",
+        wrap: true,
+        color: "Good",
+        size: "Small",
+      },
+    ],
+    actions: [
+      {
+        type: "Action.Execute",
+        title: "🗑️ Remove file (keep scan)",
+        data: {
+          action: "remove_file",
+          thoughtId,
+          storagePath,
+        },
+      },
+    ],
+  };
+}
+
 // --- Hono App ---
 
 const app = new Hono();
@@ -366,12 +585,56 @@ app.post("*", async (c) => {
 
     const activity = await c.req.json();
 
-    // Only process message activities with text
-    if (activity.type !== "message" || !activity.text) {
+    // --- Handle invoke activities (Adaptive Card button clicks) ---
+    if (activity.type === "invoke" && activity.name === "adaptiveCard/action") {
+      const actionData = activity.value?.action?.data || {};
+      const { action, thoughtId, storagePath } = actionData;
+
+      if (action === "remove_file" && thoughtId && storagePath) {
+        await supabase.storage.from("cerebro-files").remove([storagePath]);
+        await supabase
+          .from("thoughts")
+          .update({ file_url: null, file_type: null })
+          .eq("id", thoughtId);
+
+        const { data: thought } = await supabase
+          .from("thoughts")
+          .select("metadata")
+          .eq("id", thoughtId)
+          .single();
+        if (thought) {
+          const meta = {
+            ...(thought.metadata as Record<string, unknown>),
+            has_file: false,
+          };
+          delete meta.file_name;
+          delete meta.file_description;
+          await supabase
+            .from("thoughts")
+            .update({ metadata: meta })
+            .eq("id", thoughtId);
+        }
+
+        return c.json({
+          status: 200,
+          body: {
+            statusCode: 200,
+            type: "application/vnd.microsoft.activity.message",
+            value:
+              "📄 File removed from storage. The scanned text is still captured in your thought.",
+          },
+        });
+      }
+
+      return c.json({ status: 200, body: {} });
+    }
+
+    // Only process message activities
+    if (activity.type !== "message") {
       return c.json({}, 200);
     }
 
-    const rawText: string = activity.text;
+    const rawText: string = activity.text || "";
     const serviceUrl: string = activity.serviceUrl.endsWith("/")
       ? activity.serviceUrl
       : activity.serviceUrl + "/";
@@ -382,6 +645,165 @@ app.post("*", async (c) => {
     // Strip @mention to get the actual thought content
     const messageText = stripBotMention(rawText, activity.recipient?.name);
 
+    // Check for file attachments
+    const fileAttachments = getFileAttachments(activity.attachments);
+
+    if (!messageText && fileAttachments.length === 0) {
+      await replyToActivity(
+        serviceUrl,
+        conversationId,
+        activityId,
+        "Send me a thought to capture! Just type your message or send a file.",
+      );
+      return c.json({}, 200);
+    }
+
+    // Register this conversation for daily digest delivery
+    await supabase
+      .from("digest_channels")
+      .upsert(
+        {
+          source: "teams",
+          teams_service_url: serviceUrl,
+          teams_conversation_id: conversationId,
+          teams_user_name: senderName,
+        },
+        { onConflict: "source,teams_conversation_id" },
+      )
+      .then(({ error: uErr }) => {
+        if (uErr) console.error("Digest channel upsert error:", uErr);
+      });
+
+    // --- File attachment handling ---
+    if (fileAttachments.length > 0) {
+      const attachment = fileAttachments[0];
+      const downloadUrl =
+        attachment.content?.downloadUrl || attachment.contentUrl;
+      const fileName: string = attachment.name || "unknown_file";
+
+      try {
+        const fileResponse = await fetch(downloadUrl);
+        if (!fileResponse.ok) {
+          throw new Error(`File download failed: ${fileResponse.status}`);
+        }
+        const buffer = await fileResponse.arrayBuffer();
+
+        // Resolve content type
+        let contentType: string = attachment.contentType || "";
+        if (
+          contentType ===
+            "application/vnd.microsoft.teams.file.download.info" ||
+          !contentType ||
+          contentType === "text/html"
+        ) {
+          contentType = mimeFromExtension(fileName);
+        }
+
+        // Analyze the file
+        const base64Data = arrayBufferToBase64(buffer);
+        const analysis = await analyzeFileWithVision(
+          base64Data,
+          contentType,
+          fileName,
+        );
+
+        // Build combined content
+        const combinedContent = messageText
+          ? `${messageText}\n\n📎 File: ${fileName}\n${analysis.description}`
+          : `📎 File: ${fileName}\n${analysis.description}`;
+
+        // Upload to storage
+        const { url: fileUrl, storagePath } = await uploadToStorage(
+          buffer,
+          fileName,
+          contentType,
+        );
+
+        // Parallel: embedding + metadata extraction
+        const [embedding, metadata] = await Promise.all([
+          getEmbedding(combinedContent),
+          extractMetadata(combinedContent),
+        ]);
+
+        // Store thought with file info
+        const { data: thought, error } = await supabase
+          .from("thoughts")
+          .insert({
+            content: combinedContent,
+            embedding,
+            file_url: fileUrl,
+            file_type: analysis.fileType,
+            metadata: {
+              ...metadata,
+              source: "teams",
+              teams_sender: senderName,
+              teams_conversation_id: conversationId,
+              has_file: true,
+              file_name: fileName,
+              file_description: analysis.description.slice(0, 200),
+            },
+          })
+          .select("id")
+          .single();
+
+        if (error) {
+          console.error("Supabase insert error:", error);
+          await replyToActivity(
+            serviceUrl,
+            conversationId,
+            activityId,
+            `❌ Failed to capture: ${error.message}`,
+          );
+          return c.json({}, 200);
+        }
+
+        const meta = metadata as Record<string, unknown>;
+        const thoughtId = thought?.id;
+
+        // Send Adaptive Card reply
+        const card = buildFileCard(
+          fileName,
+          analysis.description,
+          (meta.type as string) || "thought",
+          (meta.topics as string[]) || [],
+          thoughtId,
+          storagePath,
+        );
+        await replyWithAdaptiveCard(
+          serviceUrl,
+          conversationId,
+          activityId,
+          card,
+        );
+
+        // Create calendar reminders if detected
+        const calendars = await createCalendarReminders(meta, combinedContent);
+        if (calendars.length) {
+          await replyToActivity(
+            serviceUrl,
+            conversationId,
+            activityId,
+            `⏰ Reminder created on ${calendars.join(" + ")}`,
+          );
+        }
+
+        return c.json({}, 200);
+      } catch (err) {
+        console.error("File processing error:", err);
+        if (!messageText) {
+          await replyToActivity(
+            serviceUrl,
+            conversationId,
+            activityId,
+            `❌ Failed to process file: ${(err as Error).message}`,
+          );
+          return c.json({}, 200);
+        }
+        // Fall through to text-only flow if there's message text
+      }
+    }
+
+    // --- Text-only flow (existing behavior) ---
     if (!messageText) {
       await replyToActivity(
         serviceUrl,
@@ -391,19 +813,6 @@ app.post("*", async (c) => {
       );
       return c.json({}, 200);
     }
-
-    // Register this conversation for daily digest delivery
-    await supabase.from("digest_channels").upsert(
-      {
-        source: "teams",
-        teams_service_url: serviceUrl,
-        teams_conversation_id: conversationId,
-        teams_user_name: senderName,
-      },
-      { onConflict: "source,teams_conversation_id" },
-    ).then(({ error: uErr }) => {
-      if (uErr) console.error("Digest channel upsert error:", uErr);
-    });
 
     // Parallel: embedding + metadata extraction
     const [embedding, metadata] = await Promise.all([
