@@ -50,7 +50,7 @@ Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nat
 
 ### Daily & Weekly Digest
 
-Automated AI-powered summaries delivered to Teams and Discord. The **daily digest** (every morning) covers key themes, action items, people, and upcoming reminders. The **weekly digest** (Sundays) provides a deeper analysis of recurring patterns, goal progress, completed tasks, and relationship touchpoints. Channels auto-register on first capture.
+Automated AI-powered summaries delivered to Teams, Discord, and email. The **daily digest** (every morning) covers key themes, action items, people, and upcoming reminders. The **weekly digest** (Sundays) provides a deeper analysis of recurring patterns, goal progress, completed tasks, and relationship touchpoints. Chat channels auto-register on first capture; email uses [Resend](https://resend.com) (free tier: 100/day).
 
 **[→ Digest Setup](docs/06-daily-digest-setup.md)**
 

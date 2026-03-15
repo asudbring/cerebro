@@ -65,6 +65,11 @@ TEAMS (if using Teams delivery)
 DISCORD (if using Discord delivery)
   BOT_TOKEN:           ____________ <- From Discord setup
 
+RESEND (if using email delivery)
+  API_KEY:             ____________ <- resend.com dashboard
+  FROM address:        ____________ <- your verified domain or onboarding@resend.dev
+  TO address(es):      ____________ <- recipient email(s)
+
 --------------------------------------
 ```
 
@@ -143,9 +148,26 @@ supabase secrets set DISCORD_BOT_TOKEN=your-bot-token
 
 # Already set from initial setup
 supabase secrets set OPENROUTER_API_KEY=sk-or-v1-your-key
+
+# Email delivery via Resend (optional)
+supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxx
+supabase secrets set DIGEST_EMAIL_TO=you@example.com
+supabase secrets set DIGEST_EMAIL_FROM="Cerebro <cerebro@yourdomain.com>"
 ```
 
-> You only need to set credentials for the channels you want to deliver to. If you only use Teams, you don't need the Discord token, and vice versa.
+> You only need to set credentials for the channels you want to deliver to. All three (Teams, Discord, email) are optional and independent.
+
+### Email Setup with Resend
+
+1. Sign up at [resend.com](https://resend.com) (free — 100 emails/day, 3,000/month)
+2. Go to **API Keys** → **Create API Key** → copy the key
+3. Set `RESEND_API_KEY` as shown above
+4. Set `DIGEST_EMAIL_TO` to the recipient address (comma-separated for multiple)
+
+**From address options:**
+
+- **Quick start (no domain needed):** Use the default `Cerebro <onboarding@resend.dev>` — Resend's test domain works immediately but only sends to the account owner's email
+- **Custom domain:** In Resend → **Domains** → **Add Domain** → add the DNS records (CNAME) → then use `Cerebro <cerebro@yourdomain.com>` as the from address
 
 ### Create and Deploy
 
@@ -285,6 +307,13 @@ supabase functions logs cerebro-digest --project-ref YOUR_REF
 - Verify `DISCORD_BOT_TOKEN` is set
 - The bot must be a member of the server and have `Send Messages` permission in the target channel
 - Discord messages have a 2000 character limit — the digest function auto-splits long messages
+
+**Email delivery fails**
+
+- Verify `RESEND_API_KEY` and `DIGEST_EMAIL_TO` are set
+- If using the default `onboarding@resend.dev` from address, it can only send to the Resend account owner's email
+- For sending to any address, add and verify a custom domain in Resend
+- Check Edge Function logs for the specific Resend API error message
 
 **Cron not firing**
 

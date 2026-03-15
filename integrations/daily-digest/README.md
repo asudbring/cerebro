@@ -51,6 +51,9 @@ The AI-generated summary includes:
 | `TEAMS_BOT_APP_ID` | For Teams | Bot Framework app ID |
 | `TEAMS_BOT_APP_SECRET` | For Teams | Bot Framework app secret |
 | `DISCORD_BOT_TOKEN` | For Discord | Discord bot token |
+| `RESEND_API_KEY` | For email | Resend API key ([free tier: 100/day](https://resend.com)) |
+| `DIGEST_EMAIL_TO` | For email | Recipient address(es), comma-separated |
+| `DIGEST_EMAIL_FROM` | For email | Sender address (default: `Cerebro <onboarding@resend.dev>`) |
 
 ## Endpoints
 
@@ -59,6 +62,15 @@ The AI-generated summary includes:
 | `POST` | `/` | Generate and deliver digest (used by pg_cron). Body: `{"period":"daily"}` or `{"period":"weekly"}` |
 | `GET` | `/?generate=true` | On-demand digest generation and delivery |
 | `GET` | `/` | Health check |
+
+## Delivery Channels
+
+| Channel | How | Requirements |
+| ------- | --- | ------------ |
+| **Teams** | Bot Framework proactive message | `TEAMS_BOT_APP_ID` + `TEAMS_BOT_APP_SECRET` |
+| **Discord** | Bot REST API post to channel | `DISCORD_BOT_TOKEN` |
+| **Email** | Resend HTML email | `RESEND_API_KEY` + `DIGEST_EMAIL_TO` |
+| **Alexa** | On-demand voice query | No config — just ask |
 
 ## Database Tables
 
