@@ -30,8 +30,9 @@ The setup guide covers:
 3. **Calendar Reminders** — Auto-create O365/Google events from dates in thoughts
 4. **Daily & Weekly Digest** — AI summaries to chat channels + email
 5. **File Attachments** — AI vision scanning of images, PDFs, and documents
+6. **Task Management** — Complete, reopen, and delete tasks with natural language
 
-> **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md) · [File Attachments](docs/07-file-attachments-setup.md)
+> **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md) · [File Attachments](docs/07-file-attachments-setup.md) · [Task Management](docs/08-task-management-setup.md)
 
 ### What You Need
 
@@ -89,6 +90,18 @@ to scan and extract content, then optionally stores the file in Supabase Storage
 - 🔍 Search and filter thoughts by file attachment
 
 **[→ File Attachments Setup](docs/07-file-attachments-setup.md)**
+
+### Task Management
+
+Track task lifecycle with natural language. Complete, reopen, and delete tasks
+by describing them — Cerebro uses AI to match the right one.
+
+- ✅ Complete tasks: "done: quarterly report"
+- 🔄 Reopen tasks: "reopen: quarterly report"
+- 🗑️ Soft-delete thoughts: "delete: old reminder"
+- 🔍 Filter by status in MCP tools (open/done/deleted)
+
+**[→ Task Management Setup](docs/08-task-management-setup.md)**
 
 ## Project Structure
 

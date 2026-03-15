@@ -5,22 +5,22 @@ import { createClient } from "@supabase/supabase-js";
 import nacl from "tweetnacl";
 
 // Discord Slash Commands Registration (run once via Discord API):
-// POST /applications/{app_id}/commands
-// {
-//   "name": "capture",
-//   "description": "Capture a thought or file to Cerebro",
-//   "options": [
-//     { "name": "thought", "description": "The thought to capture", "type": 3 },
-//     { "name": "file", "description": "Attach a file to scan and store", "type": 11 }
-//   ]
-// }
-// {
-//   "name": "search",
-//   "description": "Search your thoughts",
-//   "options": [
-//     { "name": "query", "description": "Search query", "type": 3, "required": true }
-//   ]
-// }
+// PUT /applications/{app_id}/commands
+// [
+//   { "name": "capture", "description": "Capture a thought or file to Cerebro",
+//     "options": [
+//       { "name": "thought", "description": "The thought to capture", "type": 3 },
+//       { "name": "file", "description": "Attach a file to scan and store", "type": 11 }
+//     ] },
+//   { "name": "search", "description": "Search your brain",
+//     "options": [{ "name": "query", "description": "What to search for", "type": 3, "required": true }] },
+//   { "name": "complete", "description": "Mark a task as done",
+//     "options": [{ "name": "task", "description": "Describe the task to complete", "type": 3, "required": true }] },
+//   { "name": "reopen", "description": "Reopen a completed task",
+//     "options": [{ "name": "task", "description": "Describe the task to reopen", "type": 3, "required": true }] },
+//   { "name": "delete", "description": "Delete a thought or task",
+//     "options": [{ "name": "thought", "description": "Describe the thought to delete", "type": 3, "required": true }] }
+// ]
 
 // --- Environment ---
 
@@ -804,6 +804,175 @@ app.post("*", async (c) => {
       })();
 
       EdgeRuntime.waitUntil(searchPromise);
+      return c.json({ type: 5 });
+    }
+
+    if (commandName === "complete") {
+      const description = interaction.data?.options?.find(
+        (o: { name: string }) => o.name === "task",
+      )?.value || "";
+
+      if (!description) {
+        return c.json({
+          type: 4,
+          data: { content: "Please describe the task to complete. Usage: `/complete task:quarterly report`" },
+        });
+      }
+
+      const applicationId = interaction.application_id;
+      const interactionToken = interaction.token;
+
+      const processPromise = (async () => {
+        try {
+          const embedding = await getEmbedding(description);
+          const { data: results } = await supabase.rpc("match_thoughts", {
+            query_embedding: embedding,
+            match_threshold: 0.3,
+            match_count: 5,
+            filter: {},
+          });
+
+          for (const r of results || []) {
+            const { data: thought } = await supabase
+              .from("thoughts")
+              .select("id, content, metadata, status")
+              .eq("id", r.id)
+              .single();
+
+            if (!thought) continue;
+            const meta = (thought.metadata || {}) as Record<string, unknown>;
+
+            if (meta.type === "task" && thought.status !== "done" && thought.status !== "deleted") {
+              await supabase.from("thoughts").update({ status: "done" }).eq("id", thought.id);
+              const title = (meta.title as string) || thought.content.slice(0, 60);
+              await sendFollowup(applicationId, interactionToken,
+                `✅ **Marked done:** ${title}\n(${(r.similarity * 100).toFixed(0)}% match)`);
+              return;
+            }
+          }
+
+          await sendFollowup(applicationId, interactionToken,
+            `No matching open task found for "${description}".`);
+        } catch (err) {
+          console.error("Complete task error:", err);
+          await sendFollowup(applicationId, interactionToken,
+            `❌ Error: ${(err as Error).message}`);
+        }
+      })();
+
+      EdgeRuntime.waitUntil(processPromise);
+      return c.json({ type: 5 });
+    }
+
+    if (commandName === "reopen") {
+      const description = interaction.data?.options?.find(
+        (o: { name: string }) => o.name === "task",
+      )?.value || "";
+
+      if (!description) {
+        return c.json({
+          type: 4,
+          data: { content: "Please describe the task to reopen. Usage: `/reopen task:quarterly report`" },
+        });
+      }
+
+      const applicationId = interaction.application_id;
+      const interactionToken = interaction.token;
+
+      const processPromise = (async () => {
+        try {
+          const embedding = await getEmbedding(description);
+          const { data: results } = await supabase.rpc("match_thoughts", {
+            query_embedding: embedding,
+            match_threshold: 0.3,
+            match_count: 5,
+            filter: {},
+          });
+
+          for (const r of results || []) {
+            const { data: thought } = await supabase
+              .from("thoughts")
+              .select("id, content, metadata, status")
+              .eq("id", r.id)
+              .single();
+
+            if (!thought) continue;
+            const meta = (thought.metadata || {}) as Record<string, unknown>;
+
+            if (meta.type === "task" && thought.status === "done") {
+              await supabase.from("thoughts").update({ status: "open" }).eq("id", thought.id);
+              const title = (meta.title as string) || thought.content.slice(0, 60);
+              await sendFollowup(applicationId, interactionToken,
+                `🔄 **Reopened:** ${title}\n(${(r.similarity * 100).toFixed(0)}% match)`);
+              return;
+            }
+          }
+
+          await sendFollowup(applicationId, interactionToken,
+            `No matching completed task found for "${description}".`);
+        } catch (err) {
+          console.error("Reopen task error:", err);
+          await sendFollowup(applicationId, interactionToken,
+            `❌ Error: ${(err as Error).message}`);
+        }
+      })();
+
+      EdgeRuntime.waitUntil(processPromise);
+      return c.json({ type: 5 });
+    }
+
+    if (commandName === "delete") {
+      const description = interaction.data?.options?.find(
+        (o: { name: string }) => o.name === "thought",
+      )?.value || "";
+
+      if (!description) {
+        return c.json({
+          type: 4,
+          data: { content: "Please describe the thought to delete. Usage: `/delete thought:old reminder`" },
+        });
+      }
+
+      const applicationId = interaction.application_id;
+      const interactionToken = interaction.token;
+
+      const processPromise = (async () => {
+        try {
+          const embedding = await getEmbedding(description);
+          const { data: results } = await supabase.rpc("match_thoughts", {
+            query_embedding: embedding,
+            match_threshold: 0.3,
+            match_count: 5,
+            filter: {},
+          });
+
+          for (const r of results || []) {
+            const { data: thought } = await supabase
+              .from("thoughts")
+              .select("id, content, metadata, status")
+              .eq("id", r.id)
+              .single();
+
+            if (!thought || thought.status === "deleted") continue;
+            const meta = (thought.metadata || {}) as Record<string, unknown>;
+            const title = (meta.title as string) || thought.content.slice(0, 60);
+
+            await supabase.from("thoughts").update({ status: "deleted" }).eq("id", thought.id);
+            await sendFollowup(applicationId, interactionToken,
+              `🗑️ **Deleted:** ${title}\n(${(r.similarity * 100).toFixed(0)}% match)`);
+            return;
+          }
+
+          await sendFollowup(applicationId, interactionToken,
+            `No matching thought found for "${description}".`);
+        } catch (err) {
+          console.error("Delete error:", err);
+          await sendFollowup(applicationId, interactionToken,
+            `❌ Error: ${(err as Error).message}`);
+        }
+      })();
+
+      EdgeRuntime.waitUntil(processPromise);
       return c.json({ type: 5 });
     }
 

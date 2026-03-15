@@ -66,6 +66,7 @@ async function getThoughtsSince(since: Date): Promise<ThoughtRow[]> {
   const { data, error } = await supabase
     .from("thoughts")
     .select("id, content, metadata, created_at")
+    .neq("status", "deleted")
     .gte("created_at", since.toISOString())
     .order("created_at", { ascending: false });
 
@@ -80,7 +81,7 @@ async function getCompletedThoughtsSince(since: Date): Promise<ThoughtRow[]> {
   const { data, error } = await supabase
     .from("thoughts")
     .select("id, content, metadata, created_at")
-    .eq("metadata->>status", "done")
+    .eq("status", "done")
     .gte("created_at", since.toISOString())
     .order("created_at", { ascending: false });
 
@@ -96,6 +97,7 @@ async function getUpcomingReminders(withinHours: number): Promise<ThoughtRow[]> 
   const { data, error } = await supabase
     .from("thoughts")
     .select("id, content, metadata, created_at")
+    .neq("status", "deleted")
     .eq("metadata->>has_reminder", "true")
     .gte("metadata->>reminder_datetime", new Date().toISOString())
     .lte("metadata->>reminder_datetime", future.toISOString())

@@ -727,30 +727,34 @@ async function handleCompleteTask(task: string | undefined) {
   }
 
   try {
-    // Search for matching open tasks
     const embedding = await getEmbedding(task);
     const { data: results } = await supabase.rpc("match_thoughts", {
       query_embedding: embedding,
       match_threshold: 0.4,
       match_count: 5,
+      filter: {},
     });
 
-    const openTask = results?.find(
-      (r: { thought_type?: string; metadata?: Record<string, unknown> }) =>
-        r.thought_type === "task" && r.metadata?.status !== "done"
-    );
-
-    if (openTask) {
-      await supabase
+    // Find matching open task by checking real status column
+    for (const r of results || []) {
+      const { data: thought } = await supabase
         .from("thoughts")
-        .update({ metadata: { ...openTask.metadata, status: "done", source: openTask.metadata?.source } })
-        .eq("id", openTask.id);
+        .select("id, content, metadata, status")
+        .eq("id", r.id)
+        .single();
 
-      return alexaResponse(`Marked done: ${openTask.title || task}.`);
+      if (!thought) continue;
+      const meta = (thought.metadata || {}) as Record<string, unknown>;
+
+      if (meta.type === "task" && thought.status === "open") {
+        await supabase.from("thoughts").update({ status: "done" }).eq("id", thought.id);
+        const title = (meta.title as string) || task;
+        return alexaResponse(`Marked done: ${title}.`);
+      }
     }
 
     return alexaResponse(
-      `I couldn't find a matching open task for "${task}". It was captured as a new thought instead.`
+      `I couldn't find a matching open task for "${task}".`
     );
   } catch (err) {
     console.error("Complete task error:", err);
@@ -769,26 +773,65 @@ async function handleReopenTask(task: string | undefined) {
       query_embedding: embedding,
       match_threshold: 0.4,
       match_count: 5,
+      filter: {},
     });
 
-    const doneTask = results?.find(
-      (r: { thought_type?: string; metadata?: Record<string, unknown> }) =>
-        r.thought_type === "task" && r.metadata?.status === "done"
-    );
-
-    if (doneTask) {
-      const { status: _removed, ...restMeta } = (doneTask.metadata || {}) as Record<string, unknown>;
-      await supabase
+    for (const r of results || []) {
+      const { data: thought } = await supabase
         .from("thoughts")
-        .update({ metadata: { ...restMeta, source: doneTask.metadata?.source } })
-        .eq("id", doneTask.id);
+        .select("id, content, metadata, status")
+        .eq("id", r.id)
+        .single();
 
-      return alexaResponse(`Reopened: ${doneTask.title || task}.`);
+      if (!thought) continue;
+      const meta = (thought.metadata || {}) as Record<string, unknown>;
+
+      if (meta.type === "task" && thought.status === "done") {
+        await supabase.from("thoughts").update({ status: "open" }).eq("id", thought.id);
+        const title = (meta.title as string) || task;
+        return alexaResponse(`Reopened: ${title}.`);
+      }
     }
 
     return alexaResponse(`I couldn't find a completed task matching "${task}".`);
   } catch (err) {
     console.error("Reopen task error:", err);
+    return alexaResponse("Something went wrong. Try again.");
+  }
+}
+
+async function handleDeleteTask(task: string | undefined) {
+  if (!task) {
+    return alexaResponse("Which thought should I delete?", false, "Tell me which thought to delete.");
+  }
+
+  try {
+    const embedding = await getEmbedding(task);
+    const { data: results } = await supabase.rpc("match_thoughts", {
+      query_embedding: embedding,
+      match_threshold: 0.4,
+      match_count: 5,
+      filter: {},
+    });
+
+    for (const r of results || []) {
+      const { data: thought } = await supabase
+        .from("thoughts")
+        .select("id, content, metadata, status")
+        .eq("id", r.id)
+        .single();
+
+      if (!thought || thought.status === "deleted") continue;
+      const meta = (thought.metadata || {}) as Record<string, unknown>;
+      const title = (meta.title as string) || task;
+
+      await supabase.from("thoughts").update({ status: "deleted" }).eq("id", thought.id);
+      return alexaResponse(`Deleted: ${title}.`);
+    }
+
+    return alexaResponse(`I couldn't find a matching thought for "${task}".`);
+  } catch (err) {
+    console.error("Delete task error:", err);
     return alexaResponse("Something went wrong. Try again.");
   }
 }
@@ -876,6 +919,9 @@ app.post("/", async (c) => {
 
         case "ReopenTaskIntent":
           return c.json(await handleReopenTask(slots.task?.value));
+
+        case "DeleteTaskIntent":
+          return c.json(await handleDeleteTask(slots.task?.value));
 
         case "AMAZON.HelpIntent":
           return c.json(

@@ -380,6 +380,106 @@ function stripBotMention(text: string, botName?: string): string {
   return cleaned;
 }
 
+// --- Task Command Detection & Handling ---
+
+function parseTaskCommand(text: string): { action: "complete" | "reopen" | "delete"; description: string } | null {
+  const lower = text.toLowerCase().trim();
+
+  // Completion prefixes
+  const completePrefixes = ["done:", "completed:", "finished:", "complete:", "shipped:", "closed:"];
+  for (const prefix of completePrefixes) {
+    if (lower.startsWith(prefix)) {
+      return { action: "complete", description: text.slice(prefix.length).trim() };
+    }
+  }
+
+  // Reopen prefixes
+  const reopenPrefixes = ["reopen:", "undo:", "not done:", "re-open:", "undone:"];
+  for (const prefix of reopenPrefixes) {
+    if (lower.startsWith(prefix)) {
+      return { action: "reopen", description: text.slice(prefix.length).trim() };
+    }
+  }
+
+  // Delete prefixes
+  const deletePrefixes = ["delete:", "remove:", "trash:"];
+  for (const prefix of deletePrefixes) {
+    if (lower.startsWith(prefix)) {
+      return { action: "delete", description: text.slice(prefix.length).trim() };
+    }
+  }
+
+  return null;
+}
+
+async function handleTaskCommand(
+  action: "complete" | "reopen" | "delete",
+  description: string,
+  serviceUrl: string,
+  conversationId: string,
+  activityId: string,
+): Promise<void> {
+  if (!description) {
+    await replyToActivity(serviceUrl, conversationId, activityId,
+      `Please describe the task. Example: "${action}: quarterly report"`);
+    return;
+  }
+
+  const embedding = await getEmbedding(description);
+  const { data: results } = await supabase.rpc("match_thoughts", {
+    query_embedding: embedding,
+    match_threshold: 0.3,
+    match_count: 5,
+    filter: {},
+  });
+
+  if (!results || results.length === 0) {
+    await replyToActivity(serviceUrl, conversationId, activityId,
+      `No matching thought found for "${description}".`);
+    return;
+  }
+
+  // Find the right match based on action
+  for (const r of results) {
+    const { data: thought } = await supabase
+      .from("thoughts")
+      .select("id, content, metadata, status")
+      .eq("id", r.id)
+      .single();
+
+    if (!thought) continue;
+    const meta = (thought.metadata || {}) as Record<string, unknown>;
+    const title = (meta.title as string) || thought.content.slice(0, 60);
+    const similarity = (r.similarity * 100).toFixed(0);
+
+    if (action === "complete" && meta.type === "task" && thought.status !== "done" && thought.status !== "deleted") {
+      await supabase.from("thoughts").update({ status: "done" }).eq("id", thought.id);
+      await replyToActivity(serviceUrl, conversationId, activityId,
+        `✅ **Marked done:** ${title}\n(${similarity}% match)`);
+      return;
+    }
+
+    if (action === "reopen" && meta.type === "task" && thought.status === "done") {
+      await supabase.from("thoughts").update({ status: "open" }).eq("id", thought.id);
+      await replyToActivity(serviceUrl, conversationId, activityId,
+        `🔄 **Reopened:** ${title}\n(${similarity}% match)`);
+      return;
+    }
+
+    if (action === "delete" && thought.status !== "deleted") {
+      await supabase.from("thoughts").update({ status: "deleted" }).eq("id", thought.id);
+      await replyToActivity(serviceUrl, conversationId, activityId,
+        `🗑️ **Deleted:** ${title}\n(${similarity}% match)`);
+      return;
+    }
+  }
+
+  // No suitable match found
+  const actionLabels = { complete: "open task", reopen: "completed task", delete: "thought" };
+  await replyToActivity(serviceUrl, conversationId, activityId,
+    `No matching ${actionLabels[action]} found for "${description}".`);
+}
+
 // --- File Attachment Helpers ---
 
 const MIME_TYPES: Record<string, string> = {
@@ -654,6 +754,19 @@ app.post("*", async (c) => {
         conversationId,
         activityId,
         "Send me a thought to capture! Just type your message or send a file.",
+      );
+      return c.json({}, 200);
+    }
+
+    // Check for task commands (done:, reopen:, delete:)
+    const taskCmd = parseTaskCommand(messageText);
+    if (taskCmd) {
+      await handleTaskCommand(
+        taskCmd.action,
+        taskCmd.description,
+        serviceUrl,
+        conversationId,
+        activityId,
       );
       return c.json({}, 200);
     }
