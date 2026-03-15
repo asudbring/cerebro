@@ -1,6 +1,6 @@
-# Daily Digest Setup
+# Daily & Weekly Digest Setup
 
-Cerebro's daily digest automatically summarizes your captured thoughts and delivers them to your Teams and Discord channels every morning. It covers key themes, action items, people mentioned, and upcoming reminders.
+Cerebro's digest system automatically summarizes your captured thoughts and delivers them to your Teams and Discord channels. The **daily digest** runs every morning with a concise summary, while the **weekly digest** runs Sundays with a deeper analysis of recurring themes, goal progress, and patterns.
 
 ## How It Works
 
@@ -17,6 +17,28 @@ Channels are **auto-registered** — the first time you capture a thought from T
 
 **Alexa** doesn't support push notifications, but you can ask on-demand:
 > "Alexa, ask cerebro for my daily digest"
+> "Alexa, ask cerebro for my weekly digest"
+
+---
+
+## What's in Each Digest
+
+### Daily Digest (every morning)
+- Key themes and decisions
+- Action items (open and completed)
+- People mentioned and follow-ups needed
+- Reminders coming up in the next 48 hours
+- Interesting insights or things learned
+- **Target: 200-400 words**
+
+### Weekly Digest (Sundays)
+- Recurring themes and emerging patterns
+- Progress on goals and projects (completed vs open)
+- People and relationship touchpoints across the week
+- Key decisions made and their context
+- Open items and attention needed for next week
+- Week stats: type breakdown, source breakdown, busiest day
+- **Target: 400-600 words**
 
 ---
 

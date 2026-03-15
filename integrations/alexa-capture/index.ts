@@ -451,8 +451,16 @@ const TYPE_MAP: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 async function handleDailyDigest() {
+  return handleDigest(24, "daily");
+}
+
+async function handleWeeklyDigest() {
+  return handleDigest(168, "weekly");
+}
+
+async function handleDigest(hours: number, label: string) {
   try {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
     const { data: thoughts, error } = await supabase
       .from("thoughts")
@@ -462,15 +470,18 @@ async function handleDailyDigest() {
 
     if (error) throw error;
 
+    const timeLabel = label === "daily" ? "24 hours" : "7 days";
+
     if (!thoughts || thoughts.length === 0) {
       return alexaResponse(
-        "No thoughts were captured in the last 24 hours. " +
+        `No thoughts were captured in the last ${timeLabel}. ` +
         "Try capturing something from Teams, Discord, or right here with Alexa."
       );
     }
 
     // Build a spoken summary
     const byType: Record<string, number> = {};
+    const bySource: Record<string, number> = {};
     const people = new Set<string>();
     const actionItems: string[] = [];
     const reminders: string[] = [];
@@ -479,6 +490,9 @@ async function handleDailyDigest() {
       const m = t.metadata || {};
       const type = (m.type as string) || "thought";
       byType[type] = (byType[type] || 0) + 1;
+
+      const source = (m.source as string) || "unknown";
+      bySource[source] = (bySource[source] || 0) + 1;
 
       if (Array.isArray(m.people)) {
         for (const p of m.people) people.add(p as string);
@@ -497,11 +511,24 @@ async function handleDailyDigest() {
       .map(([type, count]) => `${count} ${formatTypeName(type)}${count > 1 ? "s" : ""}`)
       .join(", ");
 
-    let speech = `Here's your daily digest. You captured ${thoughts.length} thought${thoughts.length > 1 ? "s" : ""} in the last 24 hours. `;
+    let speech = `Here's your ${label} digest. You captured ${thoughts.length} thought${thoughts.length > 1 ? "s" : ""} in the last ${timeLabel}. `;
     speech += `Breakdown: ${typeBreakdown}. `;
 
+    // Weekly: add source breakdown
+    if (label === "weekly" && Object.keys(bySource).length > 1) {
+      const sourceBreakdown = Object.entries(bySource)
+        .sort((a, b) => b[1] - a[1])
+        .map(([src, count]) => `${count} from ${src}`)
+        .join(", ");
+      speech += `Sources: ${sourceBreakdown}. `;
+    }
+
     if (people.size > 0) {
-      speech += `People mentioned: ${Array.from(people).slice(0, 5).join(", ")}. `;
+      const peopleList = Array.from(people).slice(0, 5);
+      speech += `People mentioned: ${peopleList.join(", ")}. `;
+      if (label === "weekly" && people.size > 5) {
+        speech += `And ${people.size - 5} others. `;
+      }
     }
 
     if (actionItems.length > 0) {
@@ -520,8 +547,8 @@ async function handleDailyDigest() {
 
     return alexaResponse(speech);
   } catch (err) {
-    console.error("Daily digest error:", err);
-    return alexaResponse("I couldn't generate your daily digest right now. Try again later.");
+    console.error(`${label} digest error:`, err);
+    return alexaResponse(`I couldn't generate your ${label} digest right now. Try again later.`);
   }
 }
 
@@ -841,6 +868,9 @@ app.post("/", async (c) => {
         case "DailyDigestIntent":
           return c.json(await handleDailyDigest());
 
+        case "WeeklyDigestIntent":
+          return c.json(await handleWeeklyDigest());
+
         case "CompleteTaskIntent":
           return c.json(await handleCompleteTask(slots.task?.value));
 
@@ -855,7 +885,7 @@ app.post("/", async (c) => {
                 'Say "search" followed by a topic to look something up. ' +
                 'Say "done" followed by a task to mark it complete. ' +
                 'Say "reopen" followed by a task to bring it back. ' +
-                'Say "daily digest" to hear a summary of your recent thoughts. ' +
+                'Say "daily digest" or "weekly digest" to hear a summary of your recent thoughts. ' +
                 'Say "stats" to hear about your brain. ' +
                 'Or say "what\'s recent" to hear your latest thoughts.',
               false,
