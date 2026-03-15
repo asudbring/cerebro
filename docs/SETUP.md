@@ -6,6 +6,41 @@ The complete, step-by-step guide to deploying your Cerebro brain. Start with the
 
 ---
 
+## Before You Start
+
+Complete these prerequisites **before beginning any phase**. Having everything ready upfront prevents delays mid-setup.
+
+### Required for Everyone
+
+| Prerequisite | What to Do | Verify |
+|-------------|-----------|--------|
+| **GitHub account** | [Sign up](https://github.com) if you don't have one (free) — used to log into Supabase | You can log in to github.com |
+| **Supabase account** | [Sign up at supabase.com](https://supabase.com) using GitHub login | You can access the Supabase dashboard |
+| **OpenRouter account** | [Sign up at openrouter.ai](https://openrouter.ai) and [add $5 in credits](https://openrouter.ai/credits) | You have an API key at openrouter.ai/keys |
+| **Terminal / command line** | Mac: Terminal app. Windows: PowerShell. Linux: any terminal | You can run `echo hello` and see output |
+| **Supabase CLI installed** | Mac: `brew install supabase/tap/supabase`. Windows: `scoop install supabase`. Linux: `npm install -g supabase` | `supabase --version` prints a version number |
+| **Node.js (for npx)** | [Download from nodejs.org](https://nodejs.org) if not installed — needed for some MCP client bridges | `node --version` prints v18+ |
+| **An MCP-compatible AI client** | At least one of: Claude Desktop, ChatGPT (paid), Claude Code, Cursor, VS Code w/ Copilot | The app is installed and you can open it |
+| **A text editor** | For the credential tracker — Notepad, Notes app, VS Code, anything | You can paste and save text |
+
+### Required Per Feature (gather these before starting that phase)
+
+Review the decision tree below, decide which features you want, and make sure you have the prerequisites for each **before** you start.
+
+| Feature | Prerequisites |
+|---------|--------------|
+| **Discord capture** | Discord account (free) + a Discord server you own or have admin access to |
+| **Teams capture** | Microsoft 365 tenant with Teams + Azure subscription (free tier works) + M365 admin access to enable sideloading |
+| **Alexa capture** | Amazon account (same one linked to your Alexa/Echo devices) + [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) account (free, same Amazon login) |
+| **O365 Calendar reminders** | Microsoft Entra ID app registration (created during Teams setup, or create a new one) + O365 mailbox for events + M365 admin to grant consent |
+| **Google Calendar reminders** | Google Cloud account (free tier) + personal or Workspace Gmail for the target calendar |
+| **Daily/Weekly Digest** | At least one capture source (Discord or Teams) already set up and working with thoughts captured |
+| **Digest email delivery** | [Resend account](https://resend.com) (free — 100 emails/day) |
+
+> **Tip:** If you're setting up Teams capture AND O365 calendar reminders, you'll reuse the same Entra ID app registration for both — just add the `Calendars.ReadWrite` permission when you get to Phase 3.
+
+---
+
 ## Architecture Overview
 
 ```
@@ -172,6 +207,16 @@ RESEND (if using email)
 
 > **What you'll build:** A Supabase database with vector embeddings, an MCP server that lets any AI assistant capture and search your thoughts, and connections to your AI tools.
 
+### Prerequisites Checklist
+
+Before starting Phase 1, confirm you have:
+
+- [ ] Supabase account created and you can access the dashboard
+- [ ] OpenRouter account created with $5+ credits loaded
+- [ ] Supabase CLI installed (`supabase --version` works in your terminal)
+- [ ] An MCP-compatible AI client installed (Claude Desktop, ChatGPT, Claude Code, etc.)
+- [ ] Your credential tracker file open and ready
+
 ### Steps
 
 Follow the complete guide: **[Getting Started →](01-getting-started.md)**
@@ -202,6 +247,17 @@ Do NOT proceed until all of these pass:
 ## Phase 2: Capture Sources (AT LEAST ONE REQUIRED)
 
 > **What you'll build:** One or more chat-based entry points so you can capture thoughts from your phone, desktop, or voice — not just your AI coding tools.
+
+### Prerequisites Checklist
+
+Before starting Phase 2, confirm:
+
+- [ ] **Phase 1 is complete** — all 4 verification gate tests pass
+- [ ] You've decided which capture source(s) to set up (see prerequisites table in "Before You Start")
+- [ ] You have the required accounts for your chosen source(s):
+  - **Discord:** Discord account + a server you own/admin
+  - **Teams:** M365 tenant + Azure subscription + M365 admin access
+  - **Alexa:** Amazon account + Alexa Developer Console account
 
 Choose at least one capture source. You can add more later.
 
@@ -272,6 +328,16 @@ Follow the complete guide: **[Alexa Setup →](04-alexa-setup.md)**
 
 > **What you'll build:** Automatic calendar event creation when you capture a thought that mentions a future date or time. Works across ALL capture sources.
 
+### Prerequisites Checklist
+
+Before starting Phase 3, confirm:
+
+- [ ] **Phase 1 is complete** — core infrastructure verified
+- [ ] **At least one capture source works** — Phase 2 verification gate passed
+- [ ] You have the accounts/access for your chosen calendar(s):
+  - **O365 Calendar:** Entra ID app registration (from Teams setup or new), M365 admin access to grant `Calendars.ReadWrite` consent, an O365 mailbox for events
+  - **Google Calendar:** Google Cloud account, a Gmail/Google Calendar to target
+
 **What you need:** Office 365 calendar and/or Google Calendar.
 
 **Example:** Saying "remind me to check the deployment logs next Friday at 10am" from any capture source → event appears on your calendar.
@@ -292,6 +358,15 @@ Follow the complete guide: **[Reminders Setup →](05-reminders-setup.md)**
 ## Phase 4: Daily & Weekly Digest (OPTIONAL)
 
 > **What you'll build:** Automated daily and weekly summaries delivered to your chat channels (Teams, Discord, or both). Optionally adds email delivery.
+
+### Prerequisites Checklist
+
+Before starting Phase 4, confirm:
+
+- [ ] **Phase 1 is complete** — core infrastructure verified
+- [ ] **At least one capture source works** — Phase 2 verification gate passed
+- [ ] **You have captured several thoughts** — the digest needs content to summarize (at least 5-10 thoughts recommended)
+- [ ] (For email) You have a [Resend account](https://resend.com) created (free tier)
 
 **What you need:** Core setup + at least one capture source with some thoughts captured.
 
