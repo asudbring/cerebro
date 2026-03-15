@@ -1,0 +1,38 @@
+{
+  "manifest": {
+    "publishingInformation": {
+      "locales": {
+        "en-US": {
+          "summary": "Personal knowledge base with semantic search",
+          "examplePhrases": [
+            "Alexa, tell cerebro I decided to use PostgreSQL",
+            "Alexa, ask cerebro about deployment decisions",
+            "Alexa, ask cerebro for stats"
+          ],
+          "name": "Cerebro",
+          "description": "Capture thoughts, search your knowledge base, manage tasks, and get stats — all by voice. Powered by Cerebro with vector embeddings and semantic search."
+        }
+      }
+    },
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "{{SUPABASE_FUNCTION_URL}}",
+          "sslCertificateType": "Wildcard"
+        },
+        "interfaces": []
+      }
+    },
+    "manifestVersion": "1.0",
+    "privacyAndCompliance": {
+      "locales": {
+        "en-US": {}
+      },
+      "allowsPurchases": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false
+    }
+  }
+}

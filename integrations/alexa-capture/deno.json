@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "hono": "https://deno.land/x/hono@v4.9.2/mod.ts",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.47.10"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}
