@@ -1,0 +1,62 @@
+<h1 align="center">Cerebro</h1>
+
+<p align="center"><em>A cloud brain for storing thoughts — built for AI tools.</em></p>
+
+---
+
+One database, one AI gateway, one MCP server. Any AI you use can plug in. No middleware, no SaaS chains, no Zapier.
+
+Cerebro is a persistent memory layer for your AI tools. It stores your thoughts with vector embeddings and structured metadata in a Supabase database, then exposes them via MCP so that Claude, ChatGPT, Cursor, Claude Code, or whatever ships next month can all search and write to the same brain.
+
+Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nate B. Jones.
+
+## How It Works
+
+**When you capture a thought:** Your AI client sends text to the `capture_thought` MCP tool → the server generates a 1536-dimensional embedding AND extracts metadata (topics, people, action items, type) in parallel → both get stored as a single row in Supabase → confirmation returned.
+
+**When you search:** Your AI sends the query → the server embeds it → Supabase matches against every stored thought by vector similarity → results come back ranked by meaning, not keywords.
+
+## Getting Started
+
+**[→ Setup Guide](docs/01-getting-started.md)** — Build the full system (database, AI gateway, MCP server) in about 30 minutes.
+
+### What You Need
+
+| Service | Purpose | Cost |
+| ------- | ------- | ---- |
+| [Supabase](https://supabase.com) | Database + Edge Functions | Free tier |
+| [OpenRouter](https://openrouter.ai) | Embeddings + metadata extraction | ~$0.10–0.30/month |
+
+### What Gets Built
+
+- **PostgreSQL + pgvector** database with semantic search
+- **MCP server** (Supabase Edge Function) with 4 tools:
+  - `search_thoughts` — Semantic similarity search
+  - `list_thoughts` — Browse recent with filters
+  - `thought_stats` — Summary statistics
+  - `capture_thought` — Save with auto-embedding + metadata extraction
+- **Access key auth** — Simple, secure, no OAuth complexity
+
+## Project Structure
+
+```
+docs/           — Setup guides and documentation
+extensions/     — Feature extensions (coming soon)
+integrations/   — MCP server and capture sources
+schemas/        — Database schemas
+```
+
+## Connecting Your AI
+
+Works with any MCP-compatible client:
+
+| Client | Connection Method |
+| ------ | ----------------- |
+| Claude Desktop | Settings → Connectors → Add custom connector → paste URL |
+| ChatGPT | Settings → Apps & Connectors → Create → paste URL |
+| Claude Code | `claude mcp add --transport http cerebro <url> --header "x-brain-key: <key>"` |
+| Cursor/VS Code | Remote MCP URL or `mcp-remote` bridge |
+
+## License
+
+[FSL-1.1-MIT](LICENSE.md) — Based on Open Brain by Nate B. Jones.
