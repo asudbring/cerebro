@@ -1,0 +1,46 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.19",
+  "version": "1.0.0",
+  "id": "{{BOT_APP_ID}}",
+  "developer": {
+    "name": "Cerebro",
+    "websiteUrl": "https://github.com/asudbring/cerebro",
+    "privacyUrl": "https://github.com/asudbring/cerebro",
+    "termsOfUseUrl": "https://github.com/asudbring/cerebro"
+  },
+  "name": {
+    "short": "Cerebro",
+    "full": "Cerebro — AI Memory Capture"
+  },
+  "description": {
+    "short": "Capture thoughts to your AI brain",
+    "full": "Send a message to Cerebro and it gets stored with vector embeddings and AI-extracted metadata. Search your thoughts from any MCP-connected AI tool."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#6366F1",
+  "bots": [
+    {
+      "botId": "{{BOT_APP_ID}}",
+      "scopes": ["personal", "team"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal", "team"],
+          "commands": [
+            {
+              "title": "capture",
+              "description": "Capture a thought — just type your message"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["*.supabase.co"]
+}
