@@ -4,6 +4,8 @@ The complete, step-by-step guide to deploying your Cerebro brain. Start with the
 
 **Time to first working system: ~30 minutes** (core + one capture source).
 
+> **🤖 Using an AI coding tool?** See [AI-Guided Setup](09-ai-guided-setup.md) for tips on deploying Cerebro with Claude Code, Cursor, Copilot, or any AI assistant. It references this guide and adds AI-specific workflow advice.
+
 ---
 
 ## Before You Start

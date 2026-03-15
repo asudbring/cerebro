@@ -55,4 +55,5 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `docs/07-file-attachments-setup.md` — File attachment setup (vision + storage)
 - `schemas/core/005-add-status-column.sql` — Task status column and indexes
 - `docs/08-task-management-setup.md` — Task management setup guide
+- `docs/09-ai-guided-setup.md` — AI coding tool deployment workflow
 - `LICENSE.md` — FSL-1.1-MIT terms
