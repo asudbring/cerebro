@@ -18,7 +18,15 @@ Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nat
 
 ## Getting Started
 
-**[→ Setup Guide](docs/01-getting-started.md)** — Build the full system (database, AI gateway, MCP server) in about 30 minutes.
+**[→ Complete Setup Guide](docs/SETUP.md)** — Start here. Walks you through everything from core infrastructure to optional features, with verification tests at every step.
+
+The setup guide covers:
+1. **Core Infrastructure** — Supabase + OpenRouter + MCP server (~20 min)
+2. **Capture Sources** — Discord, Teams, and/or Alexa
+3. **Calendar Reminders** — Auto-create O365/Google events from dates in thoughts
+4. **Daily & Weekly Digest** — AI summaries to chat channels + email
+
+> **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md)
 
 ### What You Need
 

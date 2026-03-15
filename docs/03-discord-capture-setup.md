@@ -212,6 +212,19 @@ Open Supabase Dashboard → Table Editor → `thoughts`. New rows should have `m
 
 ---
 
+## ✅ Verification Checklist
+
+Before moving on, confirm all of these pass:
+
+- [ ] **Capture works** — `/capture thought:test thought` returns a confirmation with extracted metadata (topics, type)
+- [ ] **Search works** — `/search query:test` returns matching results ranked by similarity
+- [ ] **Supabase data** — Table Editor → `thoughts` shows rows with `metadata.source` = `"discord"`
+- [ ] **Edge Function health** — visiting `https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-discord` in a browser returns `{"status":"ok","service":"cerebro-discord"}`
+
+> If any check fails, see the **Troubleshooting** section above.
+
+---
+
 ## Calendar Reminders
 
 When you capture a thought that mentions a future date or time (e.g. `/capture thought:call the dentist tomorrow at 2pm`), Cerebro can automatically create calendar events on O365 and/or Google Calendar.

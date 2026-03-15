@@ -140,6 +140,19 @@ If both O365 and Google credentials are configured, Cerebro creates events on **
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Yes | Full JSON key file content (single line) |
 | `GOOGLE_CALENDAR_ID` | Yes | Target calendar ID (usually your email) |
 
+## ✅ Verification Checklist
+
+Before moving on, confirm all of these pass:
+
+- [ ] **Capture with date** — from any source, capture a thought mentioning a future date (e.g., "remind me to check logs next Friday at 10am")
+- [ ] **Calendar event created** — the event appears on your O365 and/or Google Calendar within a few seconds
+- [ ] **Metadata stored** — in Supabase Table Editor, the thought's `metadata` contains `has_reminder: true`, `reminder_title`, and `reminder_datetime`
+- [ ] **Non-reminder ignored** — capturing "I like PostgreSQL" does NOT create a calendar event
+
+> If any check fails, see the **Troubleshooting** section below.
+
+---
+
 ## Troubleshooting
 
 **"Reminder detected but no calendar configured":**
