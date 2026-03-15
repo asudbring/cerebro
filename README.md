@@ -46,6 +46,16 @@ Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nat
 | **Discord** | `/capture` and `/search` slash commands | [Discord Setup](docs/03-discord-capture-setup.md) |
 | **Alexa** | "Alexa, tell cerebro …" voice commands | [Alexa Setup](docs/04-alexa-setup.md) |
 
+## Features
+
+### Calendar Reminders
+
+When you mention a date or time in a captured thought, Cerebro automatically creates a calendar event on O365 and/or Google Calendar. Works from any capture source.
+
+**[→ Reminders Setup](docs/05-reminders-setup.md)**
+
+Example: "remind me to call the dentist next Wednesday at 5 AM" → creates a calendar event for Wed 5:00 AM.
+
 ## Project Structure
 
 ```
