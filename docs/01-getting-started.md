@@ -405,3 +405,4 @@ Once your MCP server is working, you can add more ways to capture thoughts:
 | Discord | [Discord Setup](03-discord-capture-setup.md) | `/capture` and `/search` slash commands |
 | Alexa | [Alexa Setup](04-alexa-setup.md) | "Alexa, tell cerebro …" voice commands |
 | Calendar Reminders | [Reminders Setup](05-reminders-setup.md) | Auto-create O365/Google calendar events from captured dates |
+| Daily Digest | [Digest Setup](06-daily-digest-setup.md) | Automated daily/weekly summaries to Teams + Discord |

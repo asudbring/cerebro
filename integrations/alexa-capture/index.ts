@@ -450,6 +450,81 @@ const TYPE_MAP: Record<string, string> = {
 // Intent Handlers
 // ---------------------------------------------------------------------------
 
+async function handleDailyDigest() {
+  try {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const { data: thoughts, error } = await supabase
+      .from("thoughts")
+      .select("content, metadata, created_at")
+      .gte("created_at", since.toISOString())
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    if (!thoughts || thoughts.length === 0) {
+      return alexaResponse(
+        "No thoughts were captured in the last 24 hours. " +
+        "Try capturing something from Teams, Discord, or right here with Alexa."
+      );
+    }
+
+    // Build a spoken summary
+    const byType: Record<string, number> = {};
+    const people = new Set<string>();
+    const actionItems: string[] = [];
+    const reminders: string[] = [];
+
+    for (const t of thoughts) {
+      const m = t.metadata || {};
+      const type = (m.type as string) || "thought";
+      byType[type] = (byType[type] || 0) + 1;
+
+      if (Array.isArray(m.people)) {
+        for (const p of m.people) people.add(p as string);
+      }
+      if (Array.isArray(m.action_items)) {
+        for (const a of m.action_items) actionItems.push(a as string);
+      }
+      if (m.has_reminder && m.reminder_title) {
+        reminders.push(m.reminder_title as string);
+      }
+    }
+
+    const typeBreakdown = Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([type, count]) => `${count} ${formatTypeName(type)}${count > 1 ? "s" : ""}`)
+      .join(", ");
+
+    let speech = `Here's your daily digest. You captured ${thoughts.length} thought${thoughts.length > 1 ? "s" : ""} in the last 24 hours. `;
+    speech += `Breakdown: ${typeBreakdown}. `;
+
+    if (people.size > 0) {
+      speech += `People mentioned: ${Array.from(people).slice(0, 5).join(", ")}. `;
+    }
+
+    if (actionItems.length > 0) {
+      speech += `You have ${actionItems.length} action item${actionItems.length > 1 ? "s" : ""}. `;
+      speech += `Top one: ${truncateForSpeech(actionItems[0], 80)}. `;
+    }
+
+    if (reminders.length > 0) {
+      speech += `Upcoming reminders: ${reminders.slice(0, 3).join(", ")}. `;
+    }
+
+    // Most recent thought
+    const latest = thoughts[0];
+    const latestTitle = (latest.metadata?.title as string) || latest.content.substring(0, 60);
+    speech += `Most recent: ${truncateForSpeech(latestTitle, 80)}.`;
+
+    return alexaResponse(speech);
+  } catch (err) {
+    console.error("Daily digest error:", err);
+    return alexaResponse("I couldn't generate your daily digest right now. Try again later.");
+  }
+}
+
 async function handleCapture(thought: string | undefined) {
   if (!thought) {
     return alexaResponse(
@@ -763,6 +838,9 @@ app.post("/", async (c) => {
         case "BrowseRecentIntent":
           return c.json(await handleBrowseRecent(slots.type?.value));
 
+        case "DailyDigestIntent":
+          return c.json(await handleDailyDigest());
+
         case "CompleteTaskIntent":
           return c.json(await handleCompleteTask(slots.task?.value));
 
@@ -777,6 +855,7 @@ app.post("/", async (c) => {
                 'Say "search" followed by a topic to look something up. ' +
                 'Say "done" followed by a task to mark it complete. ' +
                 'Say "reopen" followed by a task to bring it back. ' +
+                'Say "daily digest" to hear a summary of your recent thoughts. ' +
                 'Say "stats" to hear about your brain. ' +
                 'Or say "what\'s recent" to hear your latest thoughts.',
               false,

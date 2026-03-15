@@ -48,6 +48,14 @@ Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nat
 
 ## Features
 
+### Daily Digest
+
+Automated AI-powered summaries of your captured thoughts, delivered every morning to Teams and Discord. Covers key themes, action items, people mentioned, follow-ups, and upcoming reminders. Channels auto-register on first capture.
+
+**[→ Daily Digest Setup](docs/06-daily-digest-setup.md)**
+
+Also available on-demand via Alexa: "Alexa, ask cerebro for my daily digest"
+
 ### Calendar Reminders
 
 When you mention a date or time in a captured thought, Cerebro automatically creates a calendar event on O365 and/or Google Calendar. Works from any capture source.
@@ -61,8 +69,8 @@ Example: "remind me to call the dentist next Wednesday at 5 AM" → creates a ca
 ```
 docs/           — Setup guides and documentation
 extensions/     — Feature extensions (coming soon)
-integrations/   — MCP server, Teams capture, Discord capture, Alexa voice
-schemas/        — Database schemas
+integrations/   — MCP server, Teams capture, Discord capture, Alexa voice, daily digest
+schemas/        — Database schemas and migrations
 ```
 
 ## Connecting Your AI
