@@ -13,10 +13,13 @@ const BOT_APP_ID = Deno.env.get("TEAMS_BOT_APP_ID")!;
 const BOT_APP_SECRET = Deno.env.get("TEAMS_BOT_APP_SECRET")!;
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+
+// Single-tenant bot: use tenant-specific endpoints
+const BOT_TENANT_ID = Deno.env.get("TEAMS_BOT_TENANT_ID") || "";
 const BF_OPENID_URL =
   "https://login.botframework.com/v1/.well-known/openidconfiguration";
 const BF_TOKEN_URL =
-  "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token";
+  `https://login.microsoftonline.com/${BOT_TENANT_ID}/oauth2/v2.0/token`;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -49,7 +52,11 @@ async function validateBotFrameworkToken(
     const keyStore = jose.createLocalJWKSet(jwks);
 
     const { payload } = await jose.jwtVerify(token, keyStore, {
-      issuer: "https://api.botframework.com",
+      issuer: [
+        "https://api.botframework.com",
+        `https://sts.windows.net/${BOT_TENANT_ID}/`,
+        `https://login.microsoftonline.com/${BOT_TENANT_ID}/v2.0`,
+      ],
       audience: BOT_APP_ID,
     });
 
@@ -767,6 +774,77 @@ app.post("*", async (c) => {
         serviceUrl,
         conversationId,
         activityId,
+      );
+      return c.json({}, 200);
+    }
+
+    // --- Search command ---
+    const lowerMsg = messageText.toLowerCase().trim();
+    if (lowerMsg.startsWith("search:") || lowerMsg.startsWith("search ") || lowerMsg.startsWith("find:") || lowerMsg.startsWith("find ")) {
+      const query = messageText.replace(/^(search|find)[:\s]+/i, "").trim();
+      if (!query) {
+        await replyToActivity(serviceUrl, conversationId, activityId, "What would you like to search for? Try: `search:azure setup`");
+        return c.json({}, 200);
+      }
+      try {
+        const queryEmbedding = await getEmbedding(query);
+        const { data: results, error: searchErr } = await supabase.rpc("match_thoughts", {
+          query_embedding: queryEmbedding,
+          match_threshold: 0.3,
+          match_count: 5,
+        });
+        if (searchErr) throw searchErr;
+        if (!results || results.length === 0) {
+          await replyToActivity(serviceUrl, conversationId, activityId, `🔍 No results found for "${query}".`);
+        } else {
+          const lines = results.map((r: { content: string; similarity: number; created_at: string }, i: number) => {
+            const date = new Date(r.created_at).toLocaleDateString();
+            const score = (r.similarity * 100).toFixed(0);
+            const preview = r.content.length > 120 ? r.content.slice(0, 120) + "…" : r.content;
+            return `**${i + 1}.** (${score}% match, ${date})\n${preview}`;
+          });
+          await replyToActivity(serviceUrl, conversationId, activityId, `🔍 **${results.length} result(s) for "${query}":**\n\n${lines.join("\n\n")}`);
+        }
+      } catch (err) {
+        console.error("Search error:", err);
+        await replyToActivity(serviceUrl, conversationId, activityId, `❌ Search failed: ${err}`);
+      }
+      return c.json({}, 200);
+    }
+
+    // --- Stats command ---
+    if (lowerMsg === "stats" || lowerMsg === "statistics" || lowerMsg.startsWith("stats")) {
+      try {
+        const { count: total } = await supabase.from("thoughts").select("*", { count: "exact", head: true }).neq("status", "deleted");
+        const { count: openCount } = await supabase.from("thoughts").select("*", { count: "exact", head: true }).eq("status", "open").neq("status", "deleted");
+        const { count: doneCount } = await supabase.from("thoughts").select("*", { count: "exact", head: true }).eq("status", "done");
+        const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+        const { count: thisWeek } = await supabase.from("thoughts").select("*", { count: "exact", head: true }).gte("created_at", weekAgo).neq("status", "deleted");
+        await replyToActivity(serviceUrl, conversationId, activityId,
+          `📊 **Cerebro Stats**\n\n` +
+          `- **Total thoughts:** ${total}\n` +
+          `- **Open:** ${openCount}\n` +
+          `- **Completed:** ${doneCount}\n` +
+          `- **This week:** ${thisWeek}`
+        );
+      } catch (err) {
+        await replyToActivity(serviceUrl, conversationId, activityId, `❌ Stats failed: ${err}`);
+      }
+      return c.json({}, 200);
+    }
+
+    // --- Help command ---
+    if (lowerMsg === "help" || lowerMsg === "commands" || lowerMsg === "?") {
+      await replyToActivity(serviceUrl, conversationId, activityId,
+        `🧠 **Cerebro Commands**\n\n` +
+        `**Capture:** Just type your thought!\n` +
+        `**Search:** \`search:your query\` or \`find:your query\`\n` +
+        `**Stats:** \`stats\`\n` +
+        `**Complete task:** \`done:task description\`\n` +
+        `**Reopen task:** \`reopen:task description\`\n` +
+        `**Delete:** \`delete:thought description\`\n` +
+        `**Help:** \`help\`\n\n` +
+        `📎 You can also send files (images, PDFs, docs) to scan and store.`
       );
       return c.json({}, 200);
     }
