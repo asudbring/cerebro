@@ -217,3 +217,11 @@ Open Supabase Dashboard → Table Editor → `thoughts`. You should see new rows
 **Slow first response**
 
 - Cold start on Edge Functions takes a few seconds. Subsequent messages are faster.
+
+---
+
+## Calendar Reminders
+
+When you capture a thought that mentions a future date or time (e.g. "remind me to check the deployment logs next Friday at 10am"), Cerebro can automatically create calendar events on O365 and/or Google Calendar.
+
+See **[Reminders Setup](05-reminders-setup.md)** for configuration instructions.

@@ -34,3 +34,8 @@ Supabase Edge Function that serves as the HTTPS endpoint for the Cerebro Alexa C
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key for embeddings + metadata |
 | `ALEXA_SKILL_ID` | No | Verify requests come from your skill only |
 | `ALEXA_SKIP_VERIFICATION` | No | Set `true` to skip signature verification in dev |
+
+## Features
+
+- **Calendar reminders** — When a captured thought mentions a future date/time, automatically creates events on O365 and/or Google Calendar. See [Reminders Setup](../../docs/05-reminders-setup.md).
+  - Example: "tell cerebro set a reminder for Wednesday at 5 AM to review APIs" → creates calendar event

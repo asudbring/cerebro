@@ -20,7 +20,21 @@ Unlike the previous cerebro-oss design (which required AWS Lambda + 4 Zapier zap
 - An Amazon account (same account linked to your Alexa devices)
 - An [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) account (free — uses same Amazon account)
 - Cerebro Supabase project deployed with the core schema and `OPENROUTER_API_KEY` set
-- The `alexa-capture` Edge Function deployed (Step 2 below)
+
+## Credential Tracker
+
+```text
+ALEXA CAPTURE -- CREDENTIAL TRACKER
+--------------------------------------
+
+ALEXA DEVELOPER CONSOLE
+  Skill ID:            ____________ <- Step 1
+
+EDGE FUNCTION
+  Function URL:        ____________ <- Step 2
+
+--------------------------------------
+```
 
 ---
 
@@ -54,15 +68,6 @@ Unlike the previous cerebro-oss design (which required AWS Lambda + 4 Zapier zap
 
 ## Step 2: Deploy the Edge Function
 
-Deploy the `alexa-capture` Edge Function to Supabase:
-
-```bash
-cd /path/to/cerebro
-
-supabase functions deploy alexa-capture \
-  --project-ref YOUR_SUPABASE_PROJECT_REF
-```
-
 ### Set Environment Variables
 
 ```bash
@@ -75,12 +80,28 @@ supabase secrets set ALEXA_SKILL_ID=amzn1.ask.skill.xxxxxxxx-xxxx-xxxx-xxxx-xxxx
 
 > **Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in Edge Functions.
 
+### Create and Deploy the Function
+
+```bash
+supabase functions new cerebro-alexa
+```
+
+Copy the contents of [`integrations/alexa-capture/deno.json`](../integrations/alexa-capture/deno.json) into `supabase/functions/cerebro-alexa/deno.json`.
+
+Copy the contents of [`integrations/alexa-capture/index.ts`](../integrations/alexa-capture/index.ts) into `supabase/functions/cerebro-alexa/index.ts`.
+
+Deploy:
+
+```bash
+supabase functions deploy cerebro-alexa --no-verify-jwt
+```
+
 ### Get the Edge Function URL
 
 After deploying, your function URL will be:
 
 ```
-https://<your-project-ref>.supabase.co/functions/v1/alexa-capture
+https://<your-project-ref>.supabase.co/functions/v1/cerebro-alexa
 ```
 
 ---
@@ -91,7 +112,7 @@ https://<your-project-ref>.supabase.co/functions/v1/alexa-capture
 2. Select **HTTPS**
 3. In the **Default Region** field, paste your Edge Function URL:
    ```
-   https://<your-project-ref>.supabase.co/functions/v1/alexa-capture
+   https://<your-project-ref>.supabase.co/functions/v1/cerebro-alexa
    ```
 4. For the SSL certificate type, select: **My development endpoint has a certificate from a trusted certificate authority**
    (Supabase uses Let's Encrypt / trusted CA certificates)
@@ -190,13 +211,23 @@ The Edge Function validates:
 - "Help" *(while skill is open)*
 - "Stop" / "Cancel" *(exit)*
 
+### Reminders (with Calendar Integration)
+
+When you mention a date/time, Cerebro automatically creates calendar events if configured:
+
+- "Alexa, tell cerebro set a reminder for Wednesday at 5 AM to review APIs"
+- "Alexa, tell cerebro meeting with Sarah next Monday at 3pm"
+- "Alexa, tell cerebro remind me to call the dentist tomorrow"
+
+See **[Reminders Setup](05-reminders-setup.md)** to connect O365 and/or Google Calendar.
+
 ---
 
 ## Troubleshooting
 
 **"There was a problem with the requested skill's response":**
 
-- Check Edge Function logs: `supabase functions logs alexa-capture --project-ref YOUR_REF`
+- Check Edge Function logs: `supabase functions logs cerebro-alexa --project-ref YOUR_REF`
 - Verify `OPENROUTER_API_KEY` is set correctly
 - Ensure the core schema is deployed (thoughts table + match_thoughts function)
 

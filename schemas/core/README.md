@@ -30,16 +30,19 @@ The foundational database schema for Cerebro.
 
 ## Metadata Schema
 
-The `metadata` JSONB column follows this structure (extracted automatically by the MCP server):
+The `metadata` JSONB column follows this structure (extracted automatically by the AI pipeline):
 
 ```json
 {
-  "type": "observation | task | idea | reference | person_note",
+  "title": "Short descriptive title",
+  "type": "idea | task | person_note | project_update | meeting_note | decision | reflection | reference | observation",
   "topics": ["topic1", "topic2"],
   "people": ["person1"],
   "action_items": ["todo1"],
-  "dates_mentioned": ["2026-03-15"],
-  "source": "mcp | slack | api"
+  "has_reminder": false,
+  "reminder_title": "",
+  "reminder_datetime": "",
+  "source": "mcp | teams | discord | alexa"
 }
 ```
 

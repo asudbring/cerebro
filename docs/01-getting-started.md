@@ -392,3 +392,16 @@ The embedding makes "Sarah's thinking about leaving" match "career changes" even
 ### Swapping Models
 
 Edit the model strings in `index.ts` and redeploy. Browse models at [openrouter.ai/models](https://openrouter.ai/models). Keep embedding dimensions at 1536 for compatibility.
+
+---
+
+## Next Steps
+
+Once your MCP server is working, you can add more ways to capture thoughts:
+
+| Integration | Guide | What It Does |
+| ----------- | ----- | ------------ |
+| Microsoft Teams | [Teams Setup](02-teams-capture-setup.md) | DM or @mention a bot in Teams |
+| Discord | [Discord Setup](03-discord-capture-setup.md) | `/capture` and `/search` slash commands |
+| Alexa | [Alexa Setup](04-alexa-setup.md) | "Alexa, tell cerebro …" voice commands |
+| Calendar Reminders | [Reminders Setup](05-reminders-setup.md) | Auto-create O365/Google calendar events from captured dates |
