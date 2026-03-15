@@ -2,73 +2,70 @@
 
 ## What You're Building
 
-A database that stores your thoughts with vector embeddings, plus an MCP server that lets any AI assistant search and write to your brain. Capture happens from whatever AI tool you're already using — Claude Desktop, ChatGPT, Claude Code, Cursor.
+A cloud-hosted database that turns your raw thoughts into searchable, AI-accessible knowledge. You'll set up a PostgreSQL instance with vector embeddings, deploy an MCP server on top of it, and connect your favourite AI tools so they can read and write to a shared memory.
 
 ## What You Need
 
-About 30 minutes and zero coding experience. You'll copy and paste everything.
+Roughly 30 minutes. No programming required — every step is copy-and-paste.
 
 ### Services (All Free Tier)
 
-- **[Supabase](https://supabase.com)** — Your database — stores everything
-- **[OpenRouter](https://openrouter.ai)** — Your AI gateway — understands everything
+- **[Supabase](https://supabase.com)** — Hosts the database and runs the server-side functions
+- **[OpenRouter](https://openrouter.ai)** — Routes embedding and metadata-extraction calls to the right AI models
 
 ### Cost
 
-| Service | Cost |
-| ------- | ---- |
+| Component | Typical Cost |
+| --------- | ------------ |
 | Supabase (free tier) | $0 |
-| Embeddings (text-embedding-3-small) | ~$0.02 / million tokens |
-| Metadata extraction (gpt-4o-mini) | ~$0.15 / million input tokens |
+| Embeddings via text-embedding-3-small | ~$0.02 per million tokens |
+| Metadata extraction via gpt-4o-mini | ~$0.15 per million input tokens |
 
-For 20 thoughts/day: roughly $0.10–0.30/month in API costs.
+At around 20 thoughts per day, expect roughly $0.10–0.30 per month in OpenRouter API charges.
 
 ---
 
 ## Credential Tracker
 
-You'll generate API keys, passwords, and IDs across services. Copy this into a text editor and fill it in as you go:
+Throughout this guide you'll create accounts and generate keys. Keep them in one place so you can reference them later. Copy the block below into any text editor:
 
 ```text
-CEREBRO -- CREDENTIAL TRACKER
-Keep this file. Fill in as you go.
---------------------------------------
+CEREBRO CREDENTIALS
+═══════════════════════════════
 
 SUPABASE
-  Account email:      ____________
-  Account password:   ____________
-  Database password:  ____________ <- Step 1
-  Project name:       ____________
-  Project ref:        ____________ <- Step 1
-  Project URL:        ____________ <- Step 3
-  Secret key:         ____________ <- Step 3
+  Email:              ____________
+  Database password:  ____________  ← Step 1
+  Project ref:        ____________  ← Step 1
+  Project URL:        ____________  ← Step 3
+  Service role key:   ____________  ← Step 3
 
 OPENROUTER
-  Account email:      ____________
-  Account password:   ____________
-  API key:            ____________ <- Step 4
+  API key:            ____________  ← Step 4
 
-GENERATED DURING SETUP
-  MCP Access Key:     ____________ <- Step 5
-  MCP Server URL:     ____________ <- Step 6
-  MCP Connection URL: ____________ <- Step 6
+CEREBRO
+  MCP Access Key:     ____________  ← Step 5
+  Server URL:         ____________  ← Step 6
+  Connection URL:     ____________  ← Step 6
 
---------------------------------------
+═══════════════════════════════
 ```
 
 ---
 
 ## Step 1: Create Your Supabase Project
 
-1. Go to [supabase.com](https://supabase.com) and sign up (GitHub login is fastest)
-2. Click **New Project**
-3. Pick your organization (default is fine)
-4. Set Project name: `cerebro` (or whatever you want)
-5. Generate a strong Database password — paste into credential tracker NOW
-6. Pick the Region closest to you
-7. Click **Create new project** and wait 1–2 minutes
+Supabase provides the PostgreSQL database that stores your thoughts and the Edge Function runtime that hosts the MCP server.
 
-> Grab your Project ref — it's the random string in your dashboard URL: `supabase.com/dashboard/project/THIS_PART`. Paste it into the tracker.
+1. Go to [supabase.com](https://supabase.com) and create an account (GitHub login works)
+2. In the dashboard, click **New Project**
+3. Choose an organization (the default is fine)
+4. Name the project `cerebro` (or your preference)
+5. Generate a database password — **copy it to your credential tracker now**
+6. Select the region closest to you
+7. Click **Create new project** and wait for provisioning (~1–2 minutes)
+
+> Your **project ref** is the alphanumeric string in the dashboard URL: `supabase.com/dashboard/project/abcxyz123`. Copy it to your tracker.
 
 ---
 
@@ -169,34 +166,38 @@ create policy "Service role full access"
 
 ### Verify
 
-Table Editor should show the `thoughts` table with columns: id, content, embedding, metadata, created_at, updated_at. Database → Functions should show `match_thoughts`.
+Open the **Table Editor** in the sidebar — you should see a `thoughts` table with six columns (id, content, embedding, metadata, created_at, updated_at). Then check **Database → Functions** and confirm `match_thoughts` appears in the list.
 
 ---
 
 ## Step 3: Save Your Connection Details
 
-In the left sidebar: **Settings** (gear icon) → **API**. Copy into your credential tracker:
+Open the Supabase sidebar: **Settings** (gear icon) → **API**. Grab these two values and paste them into your credential tracker:
 
-- **Project URL** — Listed under "Project URL"
-- **Secret key** — Under "API keys," the key formerly labeled "Service role key." Click reveal and copy.
+- **Project URL** — shown at the top of the API page
+- **Secret key** — listed under "API keys" (previously called "Service role key"). Click the eye icon to reveal it, then copy.
 
-> Treat the Secret key like a password. Anyone with it has full access to your data.
+> ⚠️ The secret key grants full database access. Keep it private — don't share it or commit it to a repo.
 
 ---
 
 ## Step 4: Get an OpenRouter API Key
 
-1. Go to [openrouter.ai](https://openrouter.ai) and sign up
-2. Go to [openrouter.ai/keys](https://openrouter.ai/keys)
-3. Click **Create Key**, name it `cerebro`
-4. Copy the key into your credential tracker immediately
-5. Add $5 in credits under Credits (lasts months)
+OpenRouter acts as a single gateway to many AI models. Cerebro uses it for both embedding generation and metadata extraction.
+
+1. Sign up at [openrouter.ai](https://openrouter.ai)
+2. Navigate to [openrouter.ai/keys](https://openrouter.ai/keys)
+3. Click **Create Key** and name it `cerebro`
+4. Copy the key to your credential tracker right away
+5. Under **Credits**, add $5 (this covers months of normal usage)
 
 ---
 
 ## Step 5: Create an Access Key
 
-Generate a random key in your terminal:
+Your MCP server sits behind a public URL. To prevent unauthorized access, you'll generate a random key that the server checks on every request.
+
+Run one of these commands in your terminal to produce a 64-character hex string:
 
 **Mac/Linux:**
 
@@ -210,7 +211,7 @@ openssl rand -hex 32
 -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
 ```
 
-Copy the output (64 characters). Paste into your credential tracker under MCP Access Key.
+Save the output in your credential tracker under MCP Access Key — you'll set it as a Supabase secret in the next step.
 
 ---
 
@@ -285,7 +286,7 @@ Paste both into your credential tracker.
 
 ## Step 7: Connect to Your AI
 
-You need your MCP Connection URL from the credential tracker.
+Grab your MCP Connection URL from the credential tracker.
 
 ### Claude Desktop
 
@@ -295,16 +296,20 @@ You need your MCP Connection URL from the credential tracker.
 4. Remote MCP server URL: paste your **MCP Connection URL**
 5. Click **Add**
 
+Start a new conversation and Cerebro's tools will be available.
+
 ### ChatGPT
 
 Requires a paid ChatGPT plan. Works on web at [chatgpt.com](https://chatgpt.com).
 
-1. Enable Developer Mode: Settings → Apps & Connectors → Advanced settings → toggle ON
-2. Settings → Apps & Connectors → Create
+1. Go to Settings → **Apps & Connectors** → **Advanced settings** → toggle **Developer mode** ON
+2. Back in **Apps & Connectors**, click **Create**
 3. Name: `Cerebro`
 4. MCP endpoint URL: paste your **MCP Connection URL**
-5. Authentication: **No Authentication** (key is in the URL)
+5. Authentication: **No Authentication** (the key is embedded in the URL)
 6. Click **Create**
+
+If ChatGPT doesn't pick up the tools on its own, tell it explicitly: "Use the search_thoughts tool to find my notes about X."
 
 ### Claude Code
 
@@ -316,9 +321,9 @@ claude mcp add --transport http cerebro \
 
 ### Other Clients (Cursor, VS Code Copilot, Windsurf)
 
-**Option A: URL with key.** Paste the full MCP Connection URL if your client supports remote MCP.
+**Option A: Remote URL.** If your client supports remote MCP servers, paste the full MCP Connection URL directly.
 
-**Option B: mcp-remote bridge.** For clients that only support local stdio:
+**Option B: mcp-remote bridge.** For clients that only support local stdio servers, use the `mcp-remote` npm package to bridge the connection:
 
 ```json
 {
@@ -341,57 +346,63 @@ claude mcp add --transport http cerebro \
 
 ---
 
-## Step 8: Use It
+## Step 8: Try It Out
 
-| Prompt | Tool Used |
-| ------ | --------- |
-| "Save this: decided to move the launch to March 15" | Capture thought |
-| "Remember that Marcus wants to move to the platform team" | Capture thought |
-| "What did I capture about career changes?" | Semantic search |
-| "What did I capture this week?" | Browse recent |
-| "How many thoughts do I have?" | Stats |
+Your AI client now has four Cerebro tools available. Here are some things to try:
 
-Test with:
+| What to Say | What Happens |
+| ----------- | ------------ |
+| "Save this: decided to move the launch to March 15" | Captures the thought, extracts metadata automatically |
+| "Remember that Marcus wants to move to the platform team" | Captures with people + topics detected |
+| "What did I capture about career changes?" | Semantic search across all thoughts |
+| "Show me what I captured this week" | Lists recent thoughts with date filters |
+| "How many thoughts do I have?" | Returns totals, type breakdown, top topics |
+
+**Quick test — capture:**
 
 ```text
 Remember this: Sarah mentioned she's thinking about leaving her job to start a consulting business
 ```
 
-Then search:
+You should see a confirmation with the auto-extracted type, topics, and people.
+
+**Quick test — search:**
 
 ```text
 What did I capture about Sarah?
 ```
+
+This should return the thought above, even though you searched for "Sarah" and the thought contains "leaving her job." That's the vector similarity search at work.
 
 ---
 
 ## Troubleshooting
 
 **Tools don't appear in Claude Desktop**
-Make sure you added the connector in Settings → Connectors (not by editing the JSON config file). Verify it's enabled for your conversation.
+Check that the connector is added under Settings → Connectors and that it's toggled on for the current conversation.
 
-**Getting 401 errors**
-The access key doesn't match. Double-check the `?key=` value matches your MCP Access Key exactly.
+**401 errors on every request**
+The access key in the URL doesn't match what's stored in Supabase Secrets. Verify the `?key=` parameter is an exact copy of your `MCP_ACCESS_KEY`.
 
-**Search returns no results**
-Capture at least one thought first. Try "search with threshold 0.3" for a wider net.
+**Search comes back empty**
+Make sure you've captured at least one thought first. You can also try lowering the threshold: "search with threshold 0.3" casts a wider net.
 
-**Slow responses**
-First call on a cold function takes a few seconds. Subsequent calls are faster. Check your Supabase region.
+**Responses take several seconds**
+The first request after a period of inactivity wakes up the Edge Function (cold start). Follow-up calls in the same session are faster. If it stays slow, check that your Supabase project region is near you.
 
 ---
 
-## How It Works Under the Hood
+## Under the Hood
 
-**Capture:** AI client → `capture_thought` MCP tool → embedding (1536-dim vector) + metadata extraction (LLM) in parallel → stored in Supabase → confirmation.
+**Capture flow:** your text → `capture_thought` tool → two parallel API calls (embedding generation + LLM metadata extraction) → single row inserted into Supabase → confirmation returned.
 
-**Search:** AI client → `search_thoughts` → embed the query → pgvector cosine similarity → results ranked by meaning.
+**Search flow:** your query → `search_thoughts` tool → query gets embedded → pgvector cosine-similarity scan across all rows → results ranked by semantic closeness.
 
-The embedding makes "Sarah's thinking about leaving" match "career changes" even with zero shared keywords.
+This is why "career changes" matches a note about "Sarah thinking about leaving" — the vectors encode meaning, not keywords.
 
-### Swapping Models
+### Changing AI Models
 
-Edit the model strings in `index.ts` and redeploy. Browse models at [openrouter.ai/models](https://openrouter.ai/models). Keep embedding dimensions at 1536 for compatibility.
+Since all model calls go through OpenRouter, you can swap to a different model by editing the model identifiers in `index.ts` and redeploying. Browse options at [openrouter.ai/models](https://openrouter.ai/models). Just keep embedding output at 1536 dimensions to stay compatible with existing data.
 
 ---
 

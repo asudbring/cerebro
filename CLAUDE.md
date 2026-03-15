@@ -1,12 +1,12 @@
 # CLAUDE.md — Agent Instructions for Cerebro
 
-This file helps AI coding tools (Claude Code, Codex, Cursor, etc.) work effectively in this repo.
+This file tells AI coding tools (Claude Code, Codex, Cursor, etc.) how to navigate and contribute to this repo safely.
 
 ## What This Repo Is
 
-Cerebro is a persistent AI memory system — one database (Supabase + pgvector), one MCP protocol, any AI client. It stores thoughts with vector embeddings and structured metadata, enabling semantic search across everything you capture. Any AI tool that supports MCP can read from and write to your brain.
+Cerebro is a personal knowledge store that lives in the cloud. It pairs a Supabase PostgreSQL database (with pgvector for embeddings) with an MCP server so that any compatible AI client can capture, search, and manage your thoughts. Multiple input channels — Discord, Teams, Alexa, and direct MCP calls — all write to the same underlying data.
 
-Based on the [Open Brain](https://github.com/NateBJones/OB1) architecture by Nate B. Jones.
+Inspired by the [Open Brain](https://github.com/NateBJones/OB1) project by Nate B. Jones.
 
 **License:** FSL-1.1-MIT. No commercial derivative works for the first 2 years.
 
@@ -29,11 +29,11 @@ schemas/        — Database schemas (core thoughts table + extensions)
 
 ## Guard Rails
 
-- **Never modify the core `thoughts` table structure.** Adding columns is fine; altering or dropping existing ones is not.
-- **No credentials, API keys, or secrets in any file.** Use environment variables via Supabase Secrets.
-- **No binary blobs** over 1MB.
-- **No `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, or unqualified `DELETE FROM`** in SQL files.
-- **MCP servers must be remote (Supabase Edge Functions), not local.** Never use `claude_desktop_config.json`, `StdioServerTransport`, or local Node.js servers.
+- **Protect the `thoughts` table schema.** New columns are fine, but do not alter, rename, or drop existing ones — every integration depends on the current structure.
+- **Keep secrets out of source.** All credentials and API keys go into Supabase Secrets (environment variables), never into committed files.
+- **No large binary files** (over 1 MB) in the repo.
+- **Destructive SQL is off-limits.** No `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, or unqualified `DELETE FROM` in any SQL file.
+- **All server functions deploy as Supabase Edge Functions.** Do not introduce local servers, stdio transports, or `claude_desktop_config.json`-based setups.
 
 ## Key Files
 
