@@ -5,3 +5,4 @@ supabase/
 .env
 .env.local
 *.log
+.vscode/
