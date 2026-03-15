@@ -184,12 +184,22 @@ async function getEmbedding(text: string): Promise<number[]> {
 }
 
 function buildMetadataPrompt(): string {
+  // Build current Central time string so the AI doesn't have to convert from UTC
   const now = new Date();
-  const dayName = now.toLocaleDateString("en-US", { weekday: "long" });
-  const iso = now.toISOString();
+  const centralStr = now.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
+    weekday: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
 
   return `You are a metadata extractor for a personal knowledge base.
-Current datetime: ${dayName}, ${iso}
+Current datetime (Central US): ${centralStr}
 
 Given a thought, return JSON matching this schema:
 {
@@ -205,7 +215,7 @@ Given a thought, return JSON matching this schema:
 
 Rules:
 - has_reminder: true if a date/time is mentioned for a future event or reminder
-- reminder_datetime: ISO 8601 with timezone offset. Default time 09:00, timezone -06:00 (Central)
+- reminder_datetime: local datetime WITHOUT timezone offset, e.g. "2025-07-19T15:00:00". All times are Central US. Default time 09:00 if not specified.
 - reminder_title: brief title for the calendar event (e.g. "Call dentist")
 - Only extract what's explicitly there.`;
 }
@@ -261,13 +271,28 @@ async function getGraphToken(): Promise<string | null> {
   return data.access_token || null;
 }
 
+// Strip any timezone offset so both calendar APIs get bare local datetimes
+function parseLocalDatetime(datetime: string): { start: string; end: string } {
+  // Remove offset (-06:00, +05:30, Z) and optional milliseconds
+  const local = datetime.replace(/(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/, "");
+  const parts = local.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):?(\d{2})?/);
+  if (!parts) return { start: datetime, end: datetime };
+  const [, yr, mo, dy, hr, mn, sc] = parts;
+  const start = `${yr}-${mo}-${dy}T${hr}:${mn}:${sc || "00"}`;
+  // Compute end (+30 min) using manual date math to avoid UTC conversion
+  const d = new Date(Number(yr), Number(mo) - 1, Number(dy), Number(hr), Number(mn), Number(sc || 0));
+  d.setMinutes(d.getMinutes() + 30);
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const end = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return { start, end };
+}
+
 async function createO365Event(title: string, datetime: string, body: string): Promise<boolean> {
   const userEmail = Deno.env.get("CALENDAR_USER_EMAIL");
   const token = await getGraphToken();
   if (!token || !userEmail) return false;
 
-  const startTime = new Date(datetime);
-  const endTime = new Date(startTime.getTime() + 30 * 60 * 1000);
+  const { start, end } = parseLocalDatetime(datetime);
 
   const r = await fetch(
     `https://graph.microsoft.com/v1.0/users/${userEmail}/calendar/events`,
@@ -277,8 +302,8 @@ async function createO365Event(title: string, datetime: string, body: string): P
       body: JSON.stringify({
         subject: title,
         body: { contentType: "Text", content: body },
-        start: { dateTime: startTime.toISOString(), timeZone: "UTC" },
-        end: { dateTime: endTime.toISOString(), timeZone: "UTC" },
+        start: { dateTime: start, timeZone: "America/Chicago" },
+        end: { dateTime: end, timeZone: "America/Chicago" },
         isReminderOn: true,
         reminderMinutesBeforeStart: 15,
       }),
@@ -337,8 +362,7 @@ async function createGoogleEvent(title: string, datetime: string, body: string):
   const token = await getGoogleAccessToken();
   if (!token || !calendarId) return false;
 
-  const startTime = new Date(datetime);
-  const endTime = new Date(startTime.getTime() + 30 * 60 * 1000);
+  const { start, end } = parseLocalDatetime(datetime);
 
   const r = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
@@ -348,8 +372,8 @@ async function createGoogleEvent(title: string, datetime: string, body: string):
       body: JSON.stringify({
         summary: title,
         description: body,
-        start: { dateTime: startTime.toISOString() },
-        end: { dateTime: endTime.toISOString() },
+        start: { dateTime: start, timeZone: "America/Chicago" },
+        end: { dateTime: end, timeZone: "America/Chicago" },
         reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 15 }] },
       }),
     },
@@ -368,8 +392,8 @@ async function createCalendarReminders(
     createO365Event(title, datetime, content).catch(() => false),
     createGoogleEvent(title, datetime, content).catch(() => false),
   ]);
-  if (o365) created.push("O365");
-  if (google) created.push("Google");
+  if (o365) created.push("Office 365");
+  if (google) created.push("Google Calendar");
   return created;
 }
 
