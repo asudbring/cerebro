@@ -268,7 +268,7 @@ server.registerTool(
   {
     title: "Search Thoughts",
     description:
-      "Search captured thoughts by meaning. Use this when the user asks about a topic, person, or idea they've previously captured.",
+      "Search captured thoughts by meaning. Use this when the user asks about a topic, person, or idea they've previously captured. Note: deleted thoughts may appear in results — use list_thoughts for filtered views.",
     inputSchema: {
       query: z.string().describe("What to search for"),
       limit: z.number().optional().default(10),
@@ -390,16 +390,22 @@ server.registerTool(
         .boolean()
         .optional()
         .describe("Filter to only thoughts with file attachments"),
+      status: z
+        .enum(["open", "done", "deleted", "all"])
+        .optional()
+        .default("open")
+        .describe("Filter by status. Defaults to 'open'. Use 'all' to include everything."),
     },
   },
-  async ({ limit, type, topic, person, days, has_file }) => {
+  async ({ limit, type, topic, person, days, has_file, status }) => {
     try {
       let q = supabase
         .from("thoughts")
-        .select("content, metadata, created_at, file_url, file_type")
+        .select("content, metadata, created_at, file_url, file_type, status")
         .order("created_at", { ascending: false })
         .limit(limit);
 
+      if (status !== "all") q = q.eq("status", status);
       if (type) q = q.contains("metadata", { type });
       if (topic) q = q.contains("metadata", { topics: [topic] });
       if (person) q = q.contains("metadata", { people: [person] });
@@ -627,6 +633,163 @@ server.registerTool(
         ],
         isError: true,
       };
+    }
+  },
+);
+
+// Tool 5: Complete Task
+server.registerTool(
+  "complete_task",
+  {
+    title: "Complete Task",
+    description: "Mark a task as done by describing it. Uses semantic matching to find the right task.",
+    inputSchema: {
+      description: z.string().describe("Description of the task to mark as done"),
+    },
+  },
+  async ({ description }) => {
+    try {
+      const embedding = await getEmbedding(description);
+      const { data, error } = await supabase.rpc("match_thoughts", {
+        query_embedding: embedding,
+        match_threshold: 0.3,
+        match_count: 5,
+        filter: {},
+      });
+
+      if (error) {
+        return { content: [{ type: "text" as const, text: `Error: ${error.message}` }], isError: true };
+      }
+
+      // Find the best matching open task
+      const task = data?.find(
+        (r: { metadata: Record<string, unknown>; similarity: number }) =>
+          r.metadata?.type === "task" && (!r.metadata?.status || r.metadata?.status !== "done")
+      );
+
+      // NOTE: match_thoughts returns metadata but we need to check the real status column too
+      // Re-query the specific thought to check column status
+      if (task) {
+        const { data: thought } = await supabase
+          .from("thoughts")
+          .select("id, content, metadata, status")
+          .eq("id", task.id)
+          .single();
+
+        if (thought && thought.status !== "done" && thought.status !== "deleted") {
+          await supabase.from("thoughts").update({ status: "done" }).eq("id", thought.id);
+          const title = (thought.metadata as Record<string, unknown>)?.title || thought.content.slice(0, 60);
+          return {
+            content: [{ type: "text" as const, text: `✅ **Marked done:** ${title}\n(${(task.similarity * 100).toFixed(0)}% match)` }],
+          };
+        }
+      }
+
+      return {
+        content: [{ type: "text" as const, text: `No matching open task found for "${description}".` }],
+      };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  },
+);
+
+// Tool 6: Reopen Task
+server.registerTool(
+  "reopen_task",
+  {
+    title: "Reopen Task",
+    description: "Reopen a completed task by describing it. Uses semantic matching.",
+    inputSchema: {
+      description: z.string().describe("Description of the completed task to reopen"),
+    },
+  },
+  async ({ description }) => {
+    try {
+      const embedding = await getEmbedding(description);
+      const { data, error } = await supabase.rpc("match_thoughts", {
+        query_embedding: embedding,
+        match_threshold: 0.3,
+        match_count: 5,
+        filter: {},
+      });
+
+      if (error) {
+        return { content: [{ type: "text" as const, text: `Error: ${error.message}` }], isError: true };
+      }
+
+      // Find the best matching done task
+      for (const r of data || []) {
+        const { data: thought } = await supabase
+          .from("thoughts")
+          .select("id, content, metadata, status")
+          .eq("id", r.id)
+          .single();
+
+        if (thought && thought.status === "done" && (thought.metadata as Record<string, unknown>)?.type === "task") {
+          await supabase.from("thoughts").update({ status: "open" }).eq("id", thought.id);
+          const title = (thought.metadata as Record<string, unknown>)?.title || thought.content.slice(0, 60);
+          return {
+            content: [{ type: "text" as const, text: `🔄 **Reopened:** ${title}\n(${(r.similarity * 100).toFixed(0)}% match)` }],
+          };
+        }
+      }
+
+      return {
+        content: [{ type: "text" as const, text: `No matching completed task found for "${description}".` }],
+      };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  },
+);
+
+// Tool 7: Delete Thought
+server.registerTool(
+  "delete_task",
+  {
+    title: "Delete Thought",
+    description: "Soft-delete a thought or task by describing it. The thought is hidden but not permanently removed.",
+    inputSchema: {
+      description: z.string().describe("Description of the thought or task to delete"),
+    },
+  },
+  async ({ description }) => {
+    try {
+      const embedding = await getEmbedding(description);
+      const { data, error } = await supabase.rpc("match_thoughts", {
+        query_embedding: embedding,
+        match_threshold: 0.3,
+        match_count: 5,
+        filter: {},
+      });
+
+      if (error) {
+        return { content: [{ type: "text" as const, text: `Error: ${error.message}` }], isError: true };
+      }
+
+      // Find the best matching non-deleted thought
+      for (const r of data || []) {
+        const { data: thought } = await supabase
+          .from("thoughts")
+          .select("id, content, metadata, status")
+          .eq("id", r.id)
+          .single();
+
+        if (thought && thought.status !== "deleted") {
+          await supabase.from("thoughts").update({ status: "deleted" }).eq("id", thought.id);
+          const title = (thought.metadata as Record<string, unknown>)?.title || thought.content.slice(0, 60);
+          return {
+            content: [{ type: "text" as const, text: `🗑️ **Deleted:** ${title}\n(${(r.similarity * 100).toFixed(0)}% match)` }],
+          };
+        }
+      }
+
+      return {
+        content: [{ type: "text" as const, text: `No matching thought found for "${description}".` }],
+      };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
     }
   },
 );
