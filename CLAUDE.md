@@ -46,4 +46,5 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `docs/02-teams-capture-setup.md` — Teams integration setup
 - `docs/03-discord-capture-setup.md` — Discord integration setup
 - `docs/04-alexa-setup.md` — Alexa voice setup
+- `docs/05-reminders-setup.md` — Calendar reminders setup (O365 + Google)
 - `LICENSE.md` — FSL-1.1-MIT terms
