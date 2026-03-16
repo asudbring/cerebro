@@ -742,10 +742,34 @@ app.post("*", async (c) => {
     const chatGuid: string = message.chats?.[0]?.guid || "";
     const senderHandle: string = message.handle?.address || "";
     const isFromMe: boolean = message.isFromMe || false;
+    const messageGuid: string = message.guid || "";
+    const dateCreated: number = message.dateCreated || 0;
 
     console.log(
       `iMessage webhook: chat=${chatGuid}, from=${senderHandle}, isFromMe=${isFromMe}, text="${text.slice(0, 80)}"`,
     );
+
+    // Skip stale messages — BlueBubbles replays old messages on restart.
+    // Ignore anything older than 5 minutes.
+    const MAX_MESSAGE_AGE_MS = 5 * 60 * 1000;
+    const messageAge = Date.now() - dateCreated;
+    if (dateCreated > 0 && messageAge > MAX_MESSAGE_AGE_MS) {
+      console.log(`Skipping stale message (age=${Math.round(messageAge / 1000)}s): "${text.slice(0, 40)}"`);
+      return c.json({ status: "ok" });
+    }
+
+    // Deduplicate by message GUID — prevent processing same message twice
+    if (messageGuid) {
+      const { data: existing } = await supabase
+        .from("thoughts")
+        .select("id")
+        .eq("source_message_id", messageGuid)
+        .limit(1);
+      if (existing && existing.length > 0) {
+        console.log(`Skipping duplicate message guid=${messageGuid}`);
+        return c.json({ status: "ok" });
+      }
+    }
 
     // Skip empty messages (could be reactions, typing indicators, etc.)
     if (!text && (!message.attachments || message.attachments.length === 0)) {
@@ -958,6 +982,7 @@ app.post("*", async (c) => {
     const meta = metadata as Record<string, unknown>;
     const insertData: Record<string, unknown> = {
       content: combinedContent,
+      source_message_id: messageGuid || undefined,
       embedding,
       metadata: {
         ...meta,
