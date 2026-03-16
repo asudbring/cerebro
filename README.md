@@ -25,6 +25,7 @@ Inspired by the [Open Brain](https://github.com/NateBJones/OB1) project by Nate 
 **[→ Complete Setup Guide](docs/SETUP.md)** — Start here. Walks you through everything from core infrastructure to optional features, with verification tests at every step.
 
 The setup guide covers:
+
 1. **Core Infrastructure** — Supabase + OpenRouter + MCP server (~20 min)
 2. **Capture Sources** — Discord, Teams, Alexa, and/or iMessage
 3. **Calendar Reminders** — Auto-create O365/Google events from dates in thoughts
@@ -111,7 +112,7 @@ by describing them — Cerebro uses AI to match the right one.
 
 ## Project Structure
 
-```
+```text
 docs/           — Setup guides and documentation
 extensions/     — Feature extensions (coming soon)
 integrations/   — MCP server, Teams capture, Discord capture, Alexa voice, iMessage capture, daily digest

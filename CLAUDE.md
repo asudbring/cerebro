@@ -14,7 +14,7 @@ Inspired by the [Open Brain](https://github.com/NateBJones/OB1) project by Nate 
 
 ## Repo Structure
 
-```
+```text
 docs/           — Setup guides and documentation
 extensions/     — Feature extensions that build on the core system
 integrations/   — MCP server, capture sources, webhook receivers

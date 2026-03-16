@@ -6,7 +6,7 @@ You can configure one or both calendar backends. If neither is configured, remin
 
 ## How It Works
 
-```
+```text
 "Set a reminder for next Wednesday at 5AM to review the deployment"
      ↓
 AI extracts: has_reminder=true, reminder_title="Review the deployment"

@@ -4,7 +4,7 @@ A Supabase Edge Function that connects Discord to Cerebro via slash commands. Us
 
 ## How It Works
 
-```
+```text
 /capture thought → Discord → Edge Function → embed + extract metadata → Supabase → reply
 /search query    → Discord → Edge Function → embed query → vector search → reply with results
 ```

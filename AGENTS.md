@@ -12,8 +12,8 @@ Cerebro is a cloud-based personal knowledge store. It pairs a Supabase PostgreSQ
 
 ## Architecture
 
-```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+```text
+┌──────────────┐┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │   Teams Bot  │  │ Discord Bot  │  │  Alexa Skill │  │iMessage (BB) │
 └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
        │                 │                 │                 │
@@ -57,7 +57,7 @@ Cerebro is a cloud-based personal knowledge store. It pairs a Supabase PostgreSQ
 
 ## Repository Structure
 
-```
+```text
 cerebro/
 ├── docs/                        # Setup guides (01 through 10)
 ├── extensions/                  # Feature extensions (future)
@@ -82,6 +82,7 @@ cerebro/
 ## Guard Rails
 
 **DO:**
+
 - Add new columns to the `thoughts` table when needed
 - Use Supabase Secrets for all credentials (`npx supabase secrets set KEY=VALUE`)
 - Deploy all server functions as Supabase Edge Functions
@@ -90,6 +91,7 @@ cerebro/
 - Copy integration source to `supabase/functions/<name>/` before deploying (containers don't follow symlinks)
 
 **DO NOT:**
+
 - Alter, rename, or drop existing columns on the `thoughts` table — every integration depends on the current schema
 - Commit secrets, API keys, or passwords to source
 - Use `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, or unqualified `DELETE FROM` in SQL files
@@ -113,6 +115,7 @@ echo "SELECT * FROM thoughts LIMIT 5" | python3 scripts/dbsql.py
 ```
 
 Credentials auto-load from `.env` in the project root. Connection details:
+
 - **Host:** aws-0-us-west-2.pooler.supabase.com (session pooler)
 - **Port:** 5432
 - **User:** postgres.YOUR_PROJECT_REF
@@ -177,6 +180,7 @@ npx supabase secrets set KEY=VALUE
 ### DNS Resolution Workaround
 
 When calling the Supabase REST API from environments with DNS issues, use:
+
 ```bash
 curl --resolve YOUR_PROJECT_REF.supabase.co:443:CLOUDFLARE_IP \
   "https://YOUR_PROJECT_REF.supabase.co/rest/v1/..."
@@ -185,20 +189,24 @@ curl --resolve YOUR_PROJECT_REF.supabase.co:443:CLOUDFLARE_IP \
 ## Capture Source Details
 
 ### Teams (cerebro-teams)
+
 - Azure Bot Framework, single-tenant
 - Entra ID app: `YOUR_TEAMS_BOT_APP_ID`
 - Tenant: `YOUR_ENTRA_TENANT_ID` (yourtenantname)
 
 ### Discord (cerebro-discord)
+
 - Application ID: `YOUR_DISCORD_APP_ID`
 - Uses slash commands (`/capture`, `/search`, `/stats`, etc.)
 
 ### Alexa (cerebro-alexa)
+
 - Custom skill, HTTPS endpoint
 - Invocation: "my brain"
 - 6 intents: CaptureThought, Search, Stats, BrowseRecent, CompleteTask, ReopenTask
 
 ### iMessage (cerebro-imessage)
+
 - BlueBubbles Server on Mac → Cloudflare named tunnel → Edge Function
 - Text-based commands (no slash commands): capture, `search <query>`, `stats`, `done <desc>`, `reopen <desc>`, `delete <desc>`, `help`
 - Commands accept both colon and space delimiters: `done passport` or `done:passport`
@@ -209,30 +217,38 @@ curl --resolve YOUR_PROJECT_REF.supabase.co:443:CLOUDFLARE_IP \
 - Self-chat creates TWO chat GUIDs (phone + email) — both must be in `BLUEBUBBLES_ALLOWED_CHATS`
 
 ### Daily Digest (cerebro-digest)
+
 - Generates daily/weekly summaries via AI
 - Delivers via email (Resend), Teams, Discord, and iMessage
-- Email recipients: user@example.com, user@example.com
+- Email recipients: <user@example.com>, <user@example.com>
 - Scheduled via pg_cron in Supabase
 
 ## Known Issues & Workarounds
 
 ### psql / libpq Cannot Connect
+
 All libpq-based tools (psql, psycopg2, psycopg3) fail with "server closed the connection unexpectedly" against Supabase's Supavisor pooler. **Use `scripts/dbsql.py` instead.**
 
 ### BlueBubbles macOS Automation Permission (-1743)
+
 On macOS Sequoia 15, BlueBubbles cannot send AppleEvents to Messages (Electron TCC issue). Fix: manually insert into user-level TCC database from Terminal.app with Full Disk Access:
+
 ```bash
 sqlite3 ~/Library/Application\ Support/com.apple.TCC/TCC.db "INSERT OR REPLACE INTO access (...) VALUES ('kTCCServiceAppleEvents', 'com.BlueBubbles.BlueBubbles-Server', 0, 2, 4, 1, <csreq_blob>, NULL, 0, 'com.apple.MobileSMS', NULL, 0, ...);"
 ```
+
 Full script at `~/Desktop/fix-bluebubbles-tcc.sh` on mac-server. Must quit and reopen BlueBubbles after.
 
 ### BlueBubbles Webhook Replay
+
 BlueBubbles replays old messages as new webhooks on restart. The Edge Function guards against this with a 5-minute message age check and source_message_id deduplication.
 
 ### Supabase Edge Function Route
+
 Must use `app.post("*")` not `app.post("/")` — Supabase strips paths during routing.
 
 ### Supabase Deploy Directory
+
 Files in `supabase/functions/<name>/` must be actual copies, not symlinks. The Supabase container doesn't follow symlinks.
 
 ## Environment Variables (Supabase Secrets)

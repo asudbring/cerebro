@@ -4,7 +4,7 @@ Cerebro's digest system automatically summarizes your captured thoughts and deli
 
 ## How It Works
 
-```
+```text
 pg_cron (daily at 6 AM Central)
   → pg_net HTTP POST
     → cerebro-digest Edge Function
@@ -24,6 +24,7 @@ Channels are **auto-registered** — the first time you capture a thought from T
 ## What's in Each Digest
 
 ### Daily Digest (every morning)
+
 - Key themes and decisions
 - Action items (open and completed)
 - People mentioned and follow-ups needed
@@ -32,6 +33,7 @@ Channels are **auto-registered** — the first time you capture a thought from T
 - **Target: 200-400 words**
 
 ### Weekly Digest (Sundays)
+
 - Recurring themes and emerging patterns
 - Progress on goals and projects (completed vs open)
 - People and relationship touchpoints across the week
@@ -298,38 +300,38 @@ supabase functions logs cerebro-digest --project-ref YOUR_REF
 
 ### Common issues
 
-**No channels registered**
+#### No channels registered
 
 - Capture at least one thought from Teams or Discord first
 - Check that the capture functions have the `digest_channels` table available
 
-**Digest not being delivered**
+#### Digest not being delivered
 
 - Verify cron jobs exist: `select * from cron.job;`
 - Check `pg_net` extension is enabled
 - Verify the Edge Function URL in the cron SQL matches your project
 - Check the function logs for errors
 
-**Teams delivery fails**
+#### Teams delivery fails
 
 - Verify `TEAMS_BOT_APP_ID` and `TEAMS_BOT_APP_SECRET` are set
 - The bot must have sent at least one message to the conversation before it can proactively message
 - Check that the `teams_service_url` in `digest_channels` is still valid
 
-**Discord delivery fails**
+#### Discord delivery fails
 
 - Verify `DISCORD_BOT_TOKEN` is set
 - The bot must be a member of the server and have `Send Messages` permission in the target channel
 - Discord messages have a 2000 character limit — the digest function auto-splits long messages
 
-**Email delivery fails**
+#### Email delivery fails
 
 - Verify `RESEND_API_KEY` and `DIGEST_EMAIL_TO` are set
 - If using the default `onboarding@resend.dev` from address, it can only send to the Resend account owner's email
 - For sending to any address, add and verify a custom domain in Resend
 - Check Edge Function logs for the specific Resend API error message
 
-**Cron not firing**
+#### Cron not firing
 
 - Ensure both `pg_cron` and `pg_net` extensions are enabled
 - The cron time is in UTC — verify your offset is correct

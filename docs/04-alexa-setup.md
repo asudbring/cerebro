@@ -6,7 +6,7 @@ Unlike the previous cerebro-oss design (which required AWS Lambda + 4 Zapier zap
 
 ## Architecture
 
-```
+```text
 ┌─────────────┐     ┌──────────────────────────┐     ┌──────────────┐
 │  Alexa       │────▶│  Supabase Edge Function   │────▶│  Supabase DB  │
 │  Echo / App  │◀────│  (alexa-capture)          │◀────│  + pgvector   │
@@ -100,7 +100,7 @@ supabase functions deploy cerebro-alexa --no-verify-jwt
 
 After deploying, your function URL will be:
 
-```
+```text
 https://<your-project-ref>.supabase.co/functions/v1/cerebro-alexa
 ```
 
@@ -111,9 +111,11 @@ https://<your-project-ref>.supabase.co/functions/v1/cerebro-alexa
 1. In the Alexa Developer Console, go to **Build** → **Endpoint**
 2. Select **HTTPS**
 3. In the **Default Region** field, paste your Edge Function URL:
-   ```
+
+   ```text
    https://<your-project-ref>.supabase.co/functions/v1/cerebro-alexa
    ```
+
 4. For the SSL certificate type, select: **My development endpoint has a certificate from a trusted certificate authority**
    (Supabase uses Let's Encrypt / trusted CA certificates)
 5. Click **Save Endpoints**
@@ -143,6 +145,7 @@ https://<your-project-ref>.supabase.co/functions/v1/cerebro-alexa
 Since the skill is in **Development** mode, it's automatically available on any Alexa device registered to the same Amazon account as your developer account. Just speak the commands above — no sideloading or publishing required.
 
 Works on:
+
 - **Echo devices** (all models)
 - **Alexa app** (iOS / Android)
 - **Fire tablets**
@@ -163,6 +166,7 @@ supabase secrets set ALEXA_SKILL_ID=amzn1.ask.skill.your-id-here
 ```
 
 The Edge Function validates:
+
 1. **Signature** — X.509 certificate chain from Amazon, RSA signature over request body
 2. **Timestamp** — request must be within 150 seconds
 3. **Skill ID** — must match your `ALEXA_SKILL_ID` (if set)
