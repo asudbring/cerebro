@@ -299,12 +299,11 @@ async function createCalendarReminders(
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  const chunks: string[] = [];
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
   }
-  return btoa(chunks.join(""));
+  return btoa(binary);
 }
 
 function mimeFromExtension(filename: string): string {
@@ -330,7 +329,7 @@ async function analyzeFileWithVision(
   fileName: string,
 ): Promise<string> {
   const systemPrompt =
-    "You are analyzing a file for a personal knowledge base. Describe the contents in detail. If there is text, perform OCR and include it. Provide a comprehensive summary.";
+    "You are analyzing a file for a personal knowledge base. Describe the contents in detail. If there is text, transcribe it. Provide a comprehensive summary.";
 
   // Text/CSV: decode and return directly
   if (contentType.startsWith("text/") || contentType === "text/csv") {
@@ -343,42 +342,104 @@ async function analyzeFileWithVision(
     }
   }
 
-  // DOCX: attempt basic text extraction from XML, fall back to vision description
+  // PDF: use Gemini which natively supports PDF file input
+  if (contentType === "application/pdf") {
+    try {
+      console.log(`PDF analysis starting: ${fileName}, base64 length: ${base64Data.length}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45000);
+      const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 2000,
+          temperature: 0.2,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this PDF document (${fileName}). Extract and summarize all text content. Include key details, numbers, names, and important information.`,
+              },
+              {
+                type: "file",
+                file: {
+                  filename: fileName,
+                  file_data: `data:application/pdf;base64,${base64Data}`,
+                },
+              },
+            ],
+          }],
+        }),
+      });
+      clearTimeout(timeout);
+      console.log(`PDF analysis response status: ${r.status}`);
+      if (!r.ok) {
+        const errText = await r.text().catch(() => "");
+        console.error("PDF analysis error:", errText);
+        return `[PDF: ${fileName}] — analysis failed (${r.status}). File stored for reference.`;
+      }
+      const d = await r.json();
+      console.log("PDF analysis complete");
+      return d.choices?.[0]?.message?.content || `[PDF: ${fileName}] — analysis unavailable.`;
+    } catch (err) {
+      console.error("PDF analysis error:", err);
+      return `[PDF: ${fileName}] — could not analyze (${(err as Error).message}). File stored for reference.`;
+    }
+  }
+
+  // DOCX: use Gemini which supports document file input
   if (
     contentType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     contentType === "application/msword"
   ) {
-    // DOCX/DOC cannot be reliably extracted in Deno without libraries;
-    // ask the vision model to describe based on the filename
-    const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
-        max_tokens: 1000,
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: systemPrompt },
-          {
+    try {
+      const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 2000,
+          temperature: 0.2,
+          messages: [{
             role: "user",
-            content: `A Word document named "${fileName}" was uploaded. I cannot extract its text directly. Please acknowledge this file and note that it has been stored for reference.`,
-          },
-        ],
-      }),
-    });
-    const d = await r.json();
-    return d.choices?.[0]?.message?.content || `[Document: ${fileName}]`;
+            content: [
+              {
+                type: "text",
+                text: `Analyze this Word document (${fileName}). Extract and summarize all text content.`,
+              },
+              {
+                type: "file",
+                file: {
+                  filename: fileName,
+                  file_data: `data:${contentType};base64,${base64Data}`,
+                },
+              },
+            ],
+          }],
+        }),
+      });
+      if (!r.ok) {
+        return `[Document: ${fileName}] — analysis failed. File stored for reference.`;
+      }
+      const d = await r.json();
+      return d.choices?.[0]?.message?.content || `[Document: ${fileName}]`;
+    } catch {
+      return `[Document: ${fileName}] — could not analyze. File stored for reference.`;
+    }
   }
 
-  // Images and PDFs: send to vision model
-  if (contentType.startsWith("image/") || contentType === "application/pdf") {
-    const mediaType = contentType === "application/pdf"
-      ? "image/png" // Vision models handle PDF first-page as image
-      : contentType;
+  // Images: send to vision model
+  if (contentType.startsWith("image/")) {
     const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
       method: "POST",
       headers: {
@@ -387,7 +448,7 @@ async function analyzeFileWithVision(
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        max_tokens: 1000,
+        max_tokens: 2000,
         temperature: 0.2,
         messages: [
           { role: "system", content: systemPrompt },
@@ -396,12 +457,12 @@ async function analyzeFileWithVision(
             content: [
               {
                 type: "text",
-                text: `Analyze this file (${fileName}). Describe what you see in detail.`,
+                text: `Analyze this image (${fileName}). Describe what you see in detail. If there is text, transcribe all of it.`,
               },
               {
                 type: "image_url",
                 image_url: {
-                  url: `data:${mediaType};base64,${base64Data}`,
+                  url: `data:${contentType};base64,${base64Data}`,
                 },
               },
             ],
@@ -409,8 +470,13 @@ async function analyzeFileWithVision(
         ],
       }),
     });
+    if (!r.ok) {
+      const errText = await r.text().catch(() => "");
+      console.error(`Vision API error:`, errText);
+      return `[Image: ${fileName}] — vision analysis failed. File stored for reference.`;
+    }
     const d = await r.json();
-    return d.choices?.[0]?.message?.content || `[File: ${fileName}] — analysis unavailable.`;
+    return d.choices?.[0]?.message?.content || `[Image: ${fileName}] — analysis unavailable.`;
   }
 
   // Fallback for unsupported types
@@ -589,6 +655,7 @@ app.post("*", async (c) => {
                 content = `📎 File: ${fileName}\n${fileDescription}`;
               }
             } else {
+              console.log(`[Discord] Downloading: ${fileName} (${contentType}, ${attachment.size} bytes)`);
               // Download file from Discord CDN
               const fileResponse = await fetch(attachmentUrl);
               if (!fileResponse.ok) {
@@ -597,14 +664,22 @@ app.post("*", async (c) => {
                 );
               }
               const buffer = await fileResponse.arrayBuffer();
+              console.log(`[Discord] Downloaded ${buffer.byteLength} bytes, converting to base64`);
 
               // Analyze file
               const base64 = arrayBufferToBase64(buffer);
-              fileDescription = await analyzeFileWithVision(
-                base64,
-                contentType,
-                fileName,
-              );
+              console.log(`[Discord] Base64 length: ${base64.length}, calling analyzeFileWithVision`);
+              try {
+                fileDescription = await analyzeFileWithVision(
+                  base64,
+                  contentType,
+                  fileName,
+                );
+              } catch (analysisErr) {
+                console.error("[Discord] analyzeFileWithVision threw:", analysisErr);
+                fileDescription = `File analysis failed: ${(analysisErr as Error).message}`;
+              }
+              console.log(`[Discord] Analysis complete, uploading to storage`);
 
               // Upload to storage
               const uploadResult = await uploadToStorage(
@@ -614,6 +689,7 @@ app.post("*", async (c) => {
               );
               fileUrl = uploadResult.url;
               storagePath = uploadResult.path;
+              console.log(`[Discord] Upload complete: ${fileUrl}`);
 
               // Build combined content
               if (content) {
@@ -698,7 +774,7 @@ app.post("*", async (c) => {
                       type: 2, // BUTTON
                       style: 4, // DANGER
                       label: "🗑️ Remove file (keep scan)",
-                      custom_id: `remove_file:${thoughtId}:${storagePath}`,
+                      custom_id: `rmf:${thoughtId}`,
                     },
                   ],
                 },
@@ -1011,16 +1087,27 @@ app.post("*", async (c) => {
     const applicationId = interaction.application_id;
     const interactionToken = interaction.token;
 
-    if (customId.startsWith("remove_file:")) {
-      const parts = customId.split(":");
-      const thoughtId = parts[1];
-      const storagePath = parts.slice(2).join(":"); // Path might contain colons
+    if (customId.startsWith("rmf:")) {
+      const thoughtId = customId.slice(4);
 
       // Process file removal in background
       const removePromise = (async () => {
         try {
-          // Delete from storage
-          await supabase.storage.from("cerebro-files").remove([storagePath]);
+          // Get the file_url to find storage path
+          const { data: thought } = await supabase
+            .from("thoughts")
+            .select("file_url, metadata")
+            .eq("id", thoughtId)
+            .single();
+
+          if (thought?.file_url) {
+            // Extract storage path from signed URL
+            const urlPath = new URL(thought.file_url).pathname;
+            const match = urlPath.match(/cerebro-files\/(.+?)(?:\?|$)/);
+            if (match) {
+              await supabase.storage.from("cerebro-files").remove([match[1]]);
+            }
+          }
 
           // Clear file_url and file_type on the thought
           await supabase
@@ -1029,12 +1116,6 @@ app.post("*", async (c) => {
             .eq("id", thoughtId);
 
           // Update metadata to reflect file removal
-          const { data: thought } = await supabase
-            .from("thoughts")
-            .select("metadata")
-            .eq("id", thoughtId)
-            .single();
-
           if (thought?.metadata) {
             const meta = {
               ...(thought.metadata as Record<string, unknown>),
