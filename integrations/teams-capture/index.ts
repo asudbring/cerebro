@@ -558,7 +558,7 @@ async function analyzeFileWithVision(
         },
         body: JSON.stringify({
           model: "openai/gpt-4o-mini",
-          max_tokens: 1000,
+          max_tokens: 2000,
           temperature: 0.2,
           messages: [{
             role: "user",
@@ -590,11 +590,54 @@ async function analyzeFileWithVision(
   }
 
   if (contentType === "application/pdf") {
-    return {
-      description:
-        `PDF document: ${fileName}. File has been saved to storage for reference.`,
-      fileType: "pdf",
-    };
+    try {
+      const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 2000,
+          temperature: 0.2,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this PDF document (${fileName}). Extract and summarize all text content. Include key details, numbers, names, and important information.`,
+              },
+              {
+                type: "file",
+                file: {
+                  filename: fileName,
+                  file_data: `data:application/pdf;base64,${base64Data}`,
+                },
+              },
+            ],
+          }],
+        }),
+      });
+      if (!r.ok) {
+        console.error("PDF analysis error:", await r.text().catch(() => ""));
+        return {
+          description: `PDF document: ${fileName}. File saved to storage for reference.`,
+          fileType: "pdf",
+        };
+      }
+      const d = await r.json();
+      return {
+        description: d.choices?.[0]?.message?.content || `PDF document: ${fileName}`,
+        fileType: "pdf",
+      };
+    } catch (err) {
+      console.error("PDF analysis error:", err);
+      return {
+        description: `PDF document: ${fileName}. File saved to storage for reference.`,
+        fileType: "pdf",
+      };
+    }
   }
 
   if (
@@ -602,11 +645,52 @@ async function analyzeFileWithVision(
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     contentType === "application/msword"
   ) {
-    return {
-      description:
-        `Word document: ${fileName}. File has been saved to storage for reference.`,
-      fileType: "document",
-    };
+    try {
+      const r = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.0-flash-001",
+          max_tokens: 2000,
+          temperature: 0.2,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this Word document (${fileName}). Extract and summarize all text content.`,
+              },
+              {
+                type: "file",
+                file: {
+                  filename: fileName,
+                  file_data: `data:${contentType};base64,${base64Data}`,
+                },
+              },
+            ],
+          }],
+        }),
+      });
+      if (!r.ok) {
+        return {
+          description: `Word document: ${fileName}. File stored for reference.`,
+          fileType: "document",
+        };
+      }
+      const d = await r.json();
+      return {
+        description: d.choices?.[0]?.message?.content || `Word document: ${fileName}`,
+        fileType: "document",
+      };
+    } catch {
+      return {
+        description: `Word document: ${fileName}. File stored for reference.`,
+        fileType: "document",
+      };
+    }
   }
 
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
