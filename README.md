@@ -86,8 +86,8 @@ Example: "remind me to call the dentist next Wednesday at 5 AM" → creates a ca
 Send images, PDFs, and documents to any capture channel. Cerebro uses AI vision
 to scan and extract content, then optionally stores the file in Supabase Storage.
 
-- 📷 Image OCR and description via gpt-4o-mini
-- 📄 PDF and document text extraction
+- 📷 Image OCR and description via GPT-4o-mini vision
+- 📄 PDF and document analysis via Gemini 2.0 Flash
 - 💾 Optional file storage (1 GB free on Supabase)
 - 🔍 Search and filter thoughts by file attachment
 

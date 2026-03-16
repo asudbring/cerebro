@@ -23,8 +23,8 @@ schemas/        — Database schemas (core thoughts table + extensions)
 ## Core Architecture
 
 - **Database:** Supabase (PostgreSQL + pgvector) — `thoughts` table with 1536-dim embeddings
-- **AI Gateway:** OpenRouter — embeddings via `text-embedding-3-small`, metadata extraction via `gpt-4o-mini`
-- **MCP Server:** Supabase Edge Function (Deno + Hono) with 4 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`
+- **AI Gateway:** OpenRouter — embeddings via `text-embedding-3-small`, metadata extraction via `gpt-4o-mini`, PDF/document analysis via `gemini-2.0-flash`, image vision via `gpt-4o-mini`
+- **MCP Server:** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`
 - **Auth:** Access key via `x-brain-key` header or `?key=` query param
 
 ## Guard Rails

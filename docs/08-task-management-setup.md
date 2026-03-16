@@ -94,19 +94,19 @@ Redeploy all your active Edge Functions:
 
 ```bash
 # MCP server (adds complete_task, reopen_task, delete_task tools)
-supabase functions deploy mcp-server --no-verify-jwt
+supabase functions deploy cerebro-mcp --no-verify-jwt
 
 # Teams capture (if using Teams)
-supabase functions deploy teams-capture --no-verify-jwt
+supabase functions deploy cerebro-teams --no-verify-jwt
 
 # Discord capture (if using Discord)
-supabase functions deploy discord-capture --no-verify-jwt
+supabase functions deploy cerebro-discord --no-verify-jwt
 
 # Alexa capture (if using Alexa)
-supabase functions deploy alexa-capture --no-verify-jwt
+supabase functions deploy cerebro-alexa --no-verify-jwt
 
 # Daily digest (updated queries)
-supabase functions deploy daily-digest --no-verify-jwt
+supabase functions deploy cerebro-digest --no-verify-jwt
 ```
 
 ### Step 3: Register Discord Slash Commands (Discord only)
