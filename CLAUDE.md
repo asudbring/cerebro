@@ -2,6 +2,8 @@
 
 This file tells AI coding tools (Claude Code, Codex, Cursor, etc.) how to navigate and contribute to this repo safely.
 
+> **See also:** `AGENTS.md` for comprehensive agent instructions including architecture details, infrastructure, known issues, and integration-specific notes. **When making changes to the project, update both CLAUDE.md, AGENTS.md, and any relevant docs/ files to keep documentation in sync.**
+
 ## What This Repo Is
 
 Cerebro is a personal knowledge store that lives in the cloud. It pairs a Supabase PostgreSQL database (with pgvector for embeddings) with an MCP server so that any compatible AI client can capture, search, and manage your thoughts. Multiple input channels — Discord, Teams, Alexa, iMessage, and direct MCP calls — all write to the same underlying data.
