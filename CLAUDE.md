@@ -62,4 +62,10 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `integrations/imessage-capture/index.ts` — iMessage capture via BlueBubbles (text commands, file attachments)
 - `schemas/core/006-imessage-digest.sql` — iMessage digest channel migration
 - `docs/10-imessage-setup.md` — iMessage/BlueBubbles setup guide
+- `schemas/core/007-source-message-id.sql` — Source message ID for deduplication
+- `scripts/dbsql.py` — Pure-Python PostgreSQL client (bypasses libpq SCRAM issue with Supabase)
 - `LICENSE.md` — FSL-1.1-MIT terms
+
+## Related Projects
+
+- **[cerebro-onprem](https://github.com/asudbring/cerebro-onprem)** — Fully self-hosted version using Docker + Ollama for local AI

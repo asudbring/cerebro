@@ -46,11 +46,14 @@ The setup guide covers:
 ### What Gets Built
 
 - **PostgreSQL + pgvector** database with semantic search
-- **MCP server** (Supabase Edge Function) with 4 tools:
+- **MCP server** (Supabase Edge Function) with 7 tools:
   - `search_thoughts` — Semantic similarity search
   - `list_thoughts` — Browse recent with filters
   - `thought_stats` — Summary statistics
   - `capture_thought` — Save with auto-embedding + metadata extraction
+  - `complete_task` — Mark a task as done by semantic match
+  - `reopen_task` — Reopen a completed task
+  - `delete_task` — Soft-delete a thought
 - **Supabase Storage** — File attachments with signed URLs (1 GB free)
 - **Access key auth** — Simple, secure, no OAuth complexity
 
@@ -125,6 +128,10 @@ Works with any MCP-compatible client:
 | ChatGPT | Settings → Apps & Connectors → Create → paste URL |
 | Claude Code | `claude mcp add --transport http cerebro <url> --header "x-brain-key: <key>"` |
 | Cursor/VS Code | Remote MCP URL or `mcp-remote` bridge |
+
+## On-Prem Version
+
+A fully self-hosted version is available at [cerebro-onprem](https://github.com/asudbring/cerebro-onprem) — replaces all cloud services with Docker containers (PostgreSQL, MinIO, Express.js) and Ollama for local AI.
 
 ## License
 

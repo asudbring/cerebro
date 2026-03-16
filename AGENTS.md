@@ -272,3 +272,7 @@ These are set via `npx supabase secrets set` and available in Edge Functions:
 - **Error handling:** Try/catch with user-facing error replies, console.error for logging
 - **No local dependencies** — all imports from JSR or npm specifiers in Deno
 - **Comments:** Only where behavior is non-obvious; no boilerplate comments
+
+## Related Projects
+
+- **[cerebro-onprem](https://github.com/asudbring/cerebro-onprem)** — Fully self-hosted version using Docker (PostgreSQL, MinIO, Express.js) + Ollama for local AI. 1:1 feature parity with this cloud version.
