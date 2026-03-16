@@ -4,7 +4,7 @@ A Supabase Edge Function that connects Microsoft Teams to Cerebro. Message the b
 
 ## How It Works
 
-```
+```text
 Teams message → Azure Bot Service → Edge Function → embed + extract metadata → Supabase → reply in Teams
 ```
 

@@ -27,6 +27,7 @@ Channels are auto-registered on first capture — no manual setup required.
 The AI-generated summary includes:
 
 ### Daily
+
 - Key themes and decisions made
 - Action items — open and completed
 - People mentioned and follow-ups needed
@@ -34,6 +35,7 @@ The AI-generated summary includes:
 - Insights and things learned
 
 ### Weekly (additional analysis)
+
 - Recurring themes and emerging patterns
 - Progress on goals — completed tasks vs open items
 - People and relationship touchpoints across the week

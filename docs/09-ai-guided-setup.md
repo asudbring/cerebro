@@ -69,6 +69,7 @@ Your AI can tell you exactly what to click and where — it just can't click for
 **You do:** Create accounts, copy credentials from dashboards, paste the MCP URL into your AI client settings.
 
 **Verify before moving on:**
+
 - Ask your AI client: "Capture this thought: Testing Cerebro setup"
 - Then: "Search for testing"
 - Both should work. If not, check Edge Function logs.
@@ -122,6 +123,7 @@ Your AI can tell you exactly what to click and where — it just can't click for
 **You do:** Create the Alexa skill, configure endpoints, test on your device.
 
 **Verify before moving on:**
+
 - Send a message in your capture source → bot replies with ✅ confirmation
 - Check Supabase Table Editor → thought row exists with content, embedding, and metadata
 
@@ -205,6 +207,7 @@ When something breaks, your AI's instinct is to rewrite code. Resist this. The E
 - A step that got skipped
 
 **Debug workflow:**
+
 1. Check Edge Function logs: Supabase Dashboard → Edge Functions → your function → Logs
 2. Paste the error to your AI
 3. Let it diagnose — but don't let it rewrite the server code unless the logs point to an actual code bug
@@ -216,6 +219,7 @@ The [getting started guide](01-getting-started.md) has a credential tracker temp
 ### Run schema migrations in order
 
 The SQL files in `schemas/core/` must run in order:
+
 1. `schema.sql` — Core thoughts table
 2. `002-digest-channels.sql` — Digest channel tracking
 3. `003-digest-cron.sql` — Scheduled digest jobs

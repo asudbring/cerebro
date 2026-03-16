@@ -64,6 +64,6 @@ Every request must include a valid access key via one of:
 
 ## Connection URL
 
-```
+```text
 https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp?key=your-access-key
 ```

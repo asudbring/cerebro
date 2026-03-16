@@ -88,9 +88,11 @@ https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-discord
 1. Go back to the [Discord Developer Portal](https://discord.com/developers/applications) → your app
 2. On **General Information**, find **Interactions Endpoint URL**
 3. Paste your Edge Function URL:
-   ```
+
+   ```text
    https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-discord
    ```
+
 4. Click **Save Changes**
 
 Discord will send a verification PING to your endpoint. If it saves successfully, your endpoint is working.
@@ -153,7 +155,7 @@ curl -X POST \
 
 Build an invite URL using your Application ID:
 
-```
+```text
 https://discord.com/api/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=applications.commands%20bot
 ```
 
@@ -169,7 +171,7 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=app
 
 In any channel in your server (or a DM with the bot), type:
 
-```
+```text
 /capture thought:Sarah mentioned she's thinking about leaving her job to start a consulting business
 ```
 
@@ -177,7 +179,7 @@ You should see a "thinking..." indicator followed by a confirmation with extract
 
 ### Search Your Thoughts
 
-```
+```text
 /search query:career changes
 ```
 
@@ -191,22 +193,22 @@ Open Supabase Dashboard → Table Editor → `thoughts`. New rows should have `m
 
 ## Troubleshooting
 
-**Slash commands don't appear**
+### Slash commands don't appear
 
 - Global commands take up to 1 hour to propagate. Use guild-specific registration for instant testing.
 - Make sure the bot is invited to your server with the `applications.commands` scope.
 
-**Interactions endpoint verification fails**
+### Interactions endpoint verification fails
 
 - Check that `DISCORD_PUBLIC_KEY` is set correctly (it's the hex string from General Information, not the bot token).
 - Verify the Edge Function is deployed: visit the URL in a browser — should return `{"status":"ok","service":"cerebro-discord"}`.
 
-**Bot responds with error**
+### Bot responds with error
 
 - Check Supabase Edge Function logs for detailed error messages.
 - Verify `OPENROUTER_API_KEY` is set and has credits.
 
-**"Application did not respond" error**
+### "Application did not respond" error
 
 - The Edge Function must respond within 3 seconds. The deferred response pattern (type 5) handles this — if you see this error, the function may not be receiving requests at all. Check the interactions endpoint URL.
 

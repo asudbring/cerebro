@@ -118,9 +118,11 @@ https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-teams
 1. Go back to your Azure Bot resource in the portal
 2. Click **Configuration** in the left sidebar
 3. Set **Messaging endpoint** to:
-   ```
+
+   ```text
    https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-teams
    ```
+
 4. Click **Apply**
 
 ---
@@ -172,17 +174,21 @@ zip cerebro-teams-app.zip manifest.json color.png outline.png
 1. In Teams, find **Cerebro** in your apps or chat list
 2. Start a 1:1 chat with the bot
 3. Type a thought:
-   ```
+
+   ```text
    Sarah mentioned she's thinking about leaving her job to start a consulting business
    ```
+
 4. You should see a confirmation reply with the extracted metadata
 
 ### Channel @mention
 
 1. In any Team channel where the app is installed, type:
-   ```
+
+   ```text
    @Cerebro Just had a great architecture review meeting with the platform team
    ```
+
 2. The bot captures the thought (stripping the @mention) and replies in the thread
 
 ### Verify in Supabase
@@ -193,28 +199,28 @@ Open Supabase Dashboard → Table Editor → `thoughts`. You should see new rows
 
 ## Troubleshooting
 
-**Bot doesn't respond**
+### Bot doesn't respond
 
 - Check the messaging endpoint in Azure Bot Configuration — must be the exact Edge Function URL
 - Verify secrets are set: `supabase secrets list` should show `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`, `OPENROUTER_API_KEY`
 - Check Edge Function logs in Supabase Dashboard → Edge Functions → `cerebro-teams` → Logs
 
-**Getting 401 errors in logs**
+### Getting 401 errors in logs
 
 - The App ID or Secret may be wrong. Double-check they match your Entra ID app registration
 - Ensure the app registration is set to **Multitenant** (required for Bot Framework)
 
-**Sideloading not available**
+### Sideloading not available
 
 - Admin must enable "Upload custom apps" in Teams Admin Center (Step 5)
 - It can take up to 24 hours to propagate after enabling
 
-**Bot appears but no reply**
+### Bot appears but no reply
 
 - Check that the Edge Function deployed successfully: visit `https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-teams` in a browser — should return `{"status":"ok","service":"cerebro-teams"}`
 - Check Supabase Edge Function logs for errors
 
-**Slow first response**
+### Slow first response
 
 - Cold start on Edge Functions takes a few seconds. Subsequent messages are faster.
 

@@ -38,8 +38,8 @@ Review the decision tree below, decide which features you want, and make sure yo
 | **Google Calendar reminders** | Google Cloud account (free tier) + personal or Workspace Gmail for the target calendar |
 | **Daily/Weekly Digest** | At least one capture source (Discord or Teams) already set up and working with thoughts captured |
 | **Digest email delivery** | [Resend account](https://resend.com) (free — 100 emails/day) |
-| **File Attachments** | Supabase Storage bucket | Free (1 GB included) |
-| **Task Management** | No additional accounts needed | Free |
+| **File Attachments** | Supabase Storage bucket (free — 1 GB included) |
+| **Task Management** | No additional accounts needed (free) |
 
 > **Tip:** If you're setting up Teams capture AND O365 calendar reminders, you'll reuse the same Entra ID app registration for both — just add the `Calendars.ReadWrite` permission when you get to Phase 3.
 
@@ -47,7 +47,7 @@ Review the decision tree below, decide which features you want, and make sure yo
 
 ## Architecture Overview
 
-```
+```text
                          ┌─────────────────────────┐
                          │      Supabase            │
                          │  ┌───────────────────┐   │
@@ -73,7 +73,7 @@ Review the decision tree below, decide which features you want, and make sure yo
 
 Use this to plan which features you'll set up. **Phase 1 and Phase 2 are required.** Everything else is optional.
 
-```
+```text
 START HERE
     │
     ▼
@@ -235,6 +235,7 @@ Before starting Phase 1, confirm you have:
 Follow the complete guide: **[Getting Started →](01-getting-started.md)**
 
 This covers:
+
 1. Create a Supabase project (free tier)
 2. Set up the database (thoughts table, vector search, security)
 3. Get an OpenRouter API key (AI gateway)
@@ -261,7 +262,7 @@ Do NOT proceed until all of these pass:
 
 > **What you'll build:** One or more chat-based entry points so you can capture thoughts from your phone, desktop, or voice — not just your AI coding tools.
 
-### Prerequisites Checklist
+### Phase 2 Prerequisites
 
 Before starting Phase 2, confirm:
 
@@ -282,7 +283,7 @@ Choose at least one capture source. You can add more later.
 
 Follow the complete guide: **[Discord Setup →](03-discord-capture-setup.md)**
 
-#### 🚦 Verification Gate
+#### 🚦 Discord Verification Gate
 
 | # | Test | Expected Result |
 |---|------|-----------------|
@@ -301,7 +302,7 @@ Follow the complete guide: **[Discord Setup →](03-discord-capture-setup.md)**
 
 Follow the complete guide: **[Teams Setup →](02-teams-capture-setup.md)**
 
-#### 🚦 Verification Gate
+#### 🚦 Teams Verification Gate
 
 | # | Test | Expected Result |
 |---|------|-----------------|
@@ -322,7 +323,7 @@ Follow the complete guide: **[Teams Setup →](02-teams-capture-setup.md)**
 
 Follow the complete guide: **[Alexa Setup →](04-alexa-setup.md)**
 
-#### 🚦 Verification Gate
+#### 🚦 Alexa Verification Gate
 
 | # | Test | Expected Result |
 |---|------|-----------------|
@@ -341,7 +342,7 @@ Follow the complete guide: **[Alexa Setup →](04-alexa-setup.md)**
 
 > **What you'll build:** Automatic calendar event creation when you capture a thought that mentions a future date or time. Works across ALL capture sources.
 
-### Prerequisites Checklist
+### Phase 3 Prerequisites
 
 Before starting Phase 3, confirm:
 
@@ -357,7 +358,7 @@ Before starting Phase 3, confirm:
 
 Follow the complete guide: **[Reminders Setup →](05-reminders-setup.md)**
 
-### 🚦 Verification Gate
+### 🚦 Reminders Verification Gate
 
 | # | Test | Expected Result |
 |---|------|-----------------|
@@ -372,7 +373,7 @@ Follow the complete guide: **[Reminders Setup →](05-reminders-setup.md)**
 
 > **What you'll build:** Automated daily and weekly summaries delivered to your chat channels (Teams, Discord, or both). Optionally adds email delivery.
 
-### Prerequisites Checklist
+### Phase 4 Prerequisites
 
 Before starting Phase 4, confirm:
 
@@ -417,13 +418,13 @@ This is covered in the digest guide under **Email Setup with Resend**.
 
 > **Goal:** Scan images, PDFs, and documents posted in Teams or Discord.
 
-### Prerequisites Checklist
+### Phase 5 Prerequisites
 
 - [ ] Phase 1 complete (core infrastructure)
 - [ ] At least one capture source working (Teams or Discord)
 - [ ] Supabase Storage bucket not yet created
 
-### Steps
+### Phase 5 Steps
 
 1. Run schema migration: `schemas/core/004-add-file-columns.sql`
 2. Create `cerebro-files` storage bucket in Supabase Dashboard
@@ -432,7 +433,7 @@ This is covered in the digest guide under **Email Setup with Resend**.
 
 📖 Full guide → [File Attachments Setup](07-file-attachments-setup.md)
 
-### 🚦 Verification Gate
+### 🚦 File Attachments Verification Gate
 
 - [ ] Send an image to Teams/Discord → bot replies with AI description
 - [ ] Send a PDF → content is scanned and captured
@@ -445,12 +446,12 @@ This is covered in the digest guide under **Email Setup with Resend**.
 
 > **Goal:** Complete, reopen, and delete tasks with natural language across all capture points.
 
-### Prerequisites Checklist
+### Phase 6 Prerequisites
 
 - [ ] Phase 1 complete (core infrastructure)
 - [ ] At least one capture source working
 
-### Steps
+### Phase 6 Steps
 
 1. Run schema migration: `schemas/core/005-add-status-column.sql`
 2. Redeploy all Edge Functions
@@ -459,7 +460,7 @@ This is covered in the digest guide under **Email Setup with Resend**.
 
 📖 Full guide → [Task Management Setup](08-task-management-setup.md)
 
-### 🚦 Verification Gate
+### 🚦 Task Management Verification Gate
 
 - [ ] Capture a task thought → confirmed as "task" type
 - [ ] Complete the task with "done: description" → ✅ marked done
@@ -532,7 +533,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | Discord commands missing | Propagation delay | Global commands take up to 1 hour; use guild-specific for instant |
 | Teams bot no reply | Wrong messaging endpoint | Azure Bot → Configuration → verify URL matches function |
 | Alexa "problem with skill" | Function error | `supabase functions logs cerebro-alexa --project-ref YOUR_REF` |
-| Calendar event not created | Missing credentials | `supabase secrets list` — check GRAPH_* or GOOGLE_* vars |
+| Calendar event not created | Missing credentials | `supabase secrets list` — check GRAPH\_\* or GOOGLE\_\* vars |
 | Digest not delivered | No registered channels | Capture a thought from Teams/Discord first to auto-register |
 | Cron not firing | Extensions disabled | Enable `pg_cron` and `pg_net` in Supabase Dashboard |
 | Email not received | Resend domain restriction | Default `onboarding@resend.dev` only sends to account owner |
