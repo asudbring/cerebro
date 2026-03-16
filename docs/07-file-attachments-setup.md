@@ -4,7 +4,7 @@ Enable Cerebro to scan images, PDFs, and documents posted in Teams or Discord â€
 
 ## What You Get
 
-- **AI Vision Analysis:** Images and PDFs are analyzed by gpt-4o-mini to extract text (OCR), descriptions, and key content
+- **AI Vision Analysis:** Images are analyzed by GPT-4o-mini vision; PDFs and documents are analyzed by Gemini 2.0 Flash (native file understanding)
 - **Document Scanning:** DOCX and text files are processed and their content added to your thought
 - **Optional Storage:** Files can be saved to Supabase Storage (1 GB free tier) with signed URLs
 - **Interactive UX:** After scanning, the bot asks if you want to keep or remove the stored file
@@ -12,7 +12,7 @@ Enable Cerebro to scan images, PDFs, and documents posted in Teams or Discord â€
 ## How It Works
 
 1. You post a file (image, PDF, DOCX, TXT) in Teams or Discord
-2. Cerebro downloads and analyzes the file using gpt-4o-mini vision
+2. Cerebro downloads and analyzes the file (images via GPT-4o-mini vision, PDFs/DOCX via Gemini 2.0 Flash)
 3. The extracted text/description becomes part of your captured thought
 4. The file is automatically saved to Supabase Storage
 5. The bot replies with a summary and a button to remove the file if you only wanted the scan
@@ -21,9 +21,9 @@ Enable Cerebro to scan images, PDFs, and documents posted in Teams or Discord â€
 
 | Type | Extensions | Analysis Method |
 |------|-----------|----------------|
-| Images | PNG, JPG, JPEG, GIF, WebP | gpt-4o-mini vision (OCR + description) |
-| PDFs | PDF | gpt-4o-mini vision (page analysis) |
-| Word Docs | DOCX, DOC | Text extraction / description |
+| Images | PNG, JPG, JPEG, GIF, WebP | GPT-4o-mini vision (OCR + description) |
+| PDFs | PDF | Gemini 2.0 Flash (native file analysis) |
+| Word Docs | DOCX, DOC | Gemini 2.0 Flash (native file analysis) |
 | Text Files | TXT, CSV | Direct text extraction |
 
 ## Prerequisites
@@ -71,10 +71,10 @@ Redeploy your capture Edge Functions to pick up the file handling code:
 
 ```bash
 # Teams capture (if using Teams)
-supabase functions deploy teams-capture --no-verify-jwt
+supabase functions deploy cerebro-teams --no-verify-jwt
 
 # Discord capture (if using Discord)
-supabase functions deploy discord-capture --no-verify-jwt
+supabase functions deploy cerebro-discord --no-verify-jwt
 ```
 
 ### Step 5: Update Discord Slash Command (Discord only)
@@ -193,7 +193,8 @@ The associated thought content (scanned text) is preserved even after file delet
 | Component | Free Tier | Cost Beyond Free |
 |-----------|-----------|-----------------|
 | Supabase Storage | 1 GB | $0.021/GB per month |
-| gpt-4o-mini Vision | ~$0.003/image | Per OpenRouter pricing |
+| GPT-4o-mini Vision | ~$0.003/image | Per OpenRouter pricing |
+| Gemini 2.0 Flash | ~$0.001/document | Per OpenRouter pricing |
 | Bandwidth | 2 GB/month | $0.09/GB |
 
 Typical usage (10-20 files/day): well within free tier for both storage and API costs.
