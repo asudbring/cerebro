@@ -2,7 +2,7 @@
  * Cerebro — Daily Digest Edge Function
  *
  * Generates an AI-powered summary of yesterday's thoughts, tasks, reminders,
- * and people interactions, then delivers it to registered Teams and Discord channels.
+ * and people interactions, then delivers it to registered Teams, Discord, and iMessage channels.
  *
  * Triggered daily by pg_cron + pg_net, or on-demand via HTTP POST.
  */
@@ -23,6 +23,10 @@ const TEAMS_BOT_TENANT_ID = Deno.env.get("TEAMS_BOT_TENANT_ID");
 
 // Discord bot token (optional — only needed if delivering to Discord)
 const DISCORD_BOT_TOKEN = Deno.env.get("DISCORD_BOT_TOKEN");
+
+// BlueBubbles / iMessage (optional — only needed if delivering to iMessage)
+const BLUEBUBBLES_URL = Deno.env.get("BLUEBUBBLES_URL");
+const BLUEBUBBLES_PASSWORD = Deno.env.get("BLUEBUBBLES_PASSWORD");
 
 // Email delivery via Resend (optional — free tier: 100 emails/day)
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
@@ -53,6 +57,7 @@ interface DigestChannel {
   teams_user_name: string | null;
   discord_channel_id: string | null;
   discord_guild_id: string | null;
+  imessage_chat_guid: string | null;
 }
 
 interface DigestResult {
@@ -384,6 +389,45 @@ async function sendDiscordMessage(
   }
 }
 
+// --- Channel Delivery: iMessage via BlueBubbles ---
+
+async function sendImessageMessage(
+  chatGuid: string,
+  text: string,
+): Promise<boolean> {
+  if (!BLUEBUBBLES_URL || !BLUEBUBBLES_PASSWORD) return false;
+  try {
+    const pw = encodeURIComponent(BLUEBUBBLES_PASSWORD);
+    const base = BLUEBUBBLES_URL.replace(/\/+$/, "");
+    // Prefix with zero-width space to prevent loop in capture function
+    const prefixed = `\u200B${text}`;
+    const chunks = splitMessage(prefixed, 5000);
+    for (const chunk of chunks) {
+      const r = await fetch(
+        `${base}/api/v1/message/text?guid=${pw}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chatGuid,
+            text: chunk,
+            method: "apple-script",
+          }),
+        },
+      );
+      if (!r.ok) {
+        const msg = await r.text().catch(() => "");
+        console.error(`iMessage delivery failed: ${r.status} ${msg}`);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error("iMessage delivery error:", err);
+    return false;
+  }
+}
+
 function splitMessage(text: string, maxLen: number): string[] {
   if (text.length <= maxLen) return [text];
 
@@ -591,6 +635,9 @@ async function deliverDigest(
   const discordChannels = channels.filter(
     (ch) => ch.source === "discord" && ch.discord_channel_id,
   );
+  const imessageChannels = channels.filter(
+    (ch) => ch.source === "imessage" && ch.imessage_chat_guid,
+  );
 
   // Deliver to all channels + email in parallel
   const deliveryPromises: Promise<void>[] = [];
@@ -611,6 +658,16 @@ async function deliverDigest(
       sendDiscordMessage(ch.discord_channel_id!, digestText)
         .then((ok) => {
           if (ok) delivered.push(`discord:${ch.discord_channel_id}`);
+        }),
+    );
+  }
+
+  for (const ch of imessageChannels) {
+    if (!BLUEBUBBLES_URL || !BLUEBUBBLES_PASSWORD) continue;
+    deliveryPromises.push(
+      sendImessageMessage(ch.imessage_chat_guid!, digestText)
+        .then((ok) => {
+          if (ok) delivered.push(`imessage:${ch.imessage_chat_guid}`);
         }),
     );
   }

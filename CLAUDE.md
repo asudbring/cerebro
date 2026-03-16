@@ -4,7 +4,7 @@ This file tells AI coding tools (Claude Code, Codex, Cursor, etc.) how to naviga
 
 ## What This Repo Is
 
-Cerebro is a personal knowledge store that lives in the cloud. It pairs a Supabase PostgreSQL database (with pgvector for embeddings) with an MCP server so that any compatible AI client can capture, search, and manage your thoughts. Multiple input channels — Discord, Teams, Alexa, and direct MCP calls — all write to the same underlying data.
+Cerebro is a personal knowledge store that lives in the cloud. It pairs a Supabase PostgreSQL database (with pgvector for embeddings) with an MCP server so that any compatible AI client can capture, search, and manage your thoughts. Multiple input channels — Discord, Teams, Alexa, iMessage, and direct MCP calls — all write to the same underlying data.
 
 Inspired by the [Open Brain](https://github.com/NateBJones/OB1) project by Nate B. Jones.
 
@@ -25,6 +25,7 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - **Database:** Supabase (PostgreSQL + pgvector) — `thoughts` table with 1536-dim embeddings
 - **AI Gateway:** OpenRouter — embeddings via `text-embedding-3-small`, metadata extraction via `gpt-4o-mini`, PDF/document analysis via `gemini-2.0-flash`, image vision via `gpt-4o-mini`
 - **MCP Server:** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`
+- **iMessage Capture:** BlueBubbles on Mac server + Cloudflare named tunnel → Supabase Edge Function
 - **Auth:** Access key via `x-brain-key` header or `?key=` query param
 
 ## Guard Rails
@@ -56,4 +57,7 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `schemas/core/005-add-status-column.sql` — Task status column and indexes
 - `docs/08-task-management-setup.md` — Task management setup guide
 - `docs/09-ai-guided-setup.md` — AI coding tool deployment workflow
+- `integrations/imessage-capture/index.ts` — iMessage capture via BlueBubbles (text commands, file attachments)
+- `schemas/core/006-imessage-digest.sql` — iMessage digest channel migration
+- `docs/10-imessage-setup.md` — iMessage/BlueBubbles setup guide
 - `LICENSE.md` — FSL-1.1-MIT terms
