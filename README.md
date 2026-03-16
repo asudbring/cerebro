@@ -8,7 +8,7 @@
 
 ---
 
-Cerebro gives you a single place to store every fleeting thought, decision, and reminder — then find it again by asking what it *meant*, not what words you used. It runs on Supabase (free tier), talks to your AI tools over MCP, and accepts input from Discord, Teams, Alexa, or any MCP client.
+Cerebro gives you a single place to store every fleeting thought, decision, and reminder — then find it again by asking what it *meant*, not what words you used. It runs on Supabase (free tier), talks to your AI tools over MCP, and accepts input from Discord, Teams, Alexa, iMessage, or any MCP client.
 
 The stack is deliberately simple: a PostgreSQL database with vector search, an AI gateway for embeddings, and Edge Functions for each integration. No middleware layers, no paid connectors, no glue services.
 
@@ -26,13 +26,13 @@ Inspired by the [Open Brain](https://github.com/NateBJones/OB1) project by Nate 
 
 The setup guide covers:
 1. **Core Infrastructure** — Supabase + OpenRouter + MCP server (~20 min)
-2. **Capture Sources** — Discord, Teams, and/or Alexa
+2. **Capture Sources** — Discord, Teams, Alexa, and/or iMessage
 3. **Calendar Reminders** — Auto-create O365/Google events from dates in thoughts
 4. **Daily & Weekly Digest** — AI summaries to chat channels + email
 5. **File Attachments** — AI vision scanning of images, PDFs, and documents
 6. **Task Management** — Complete, reopen, and delete tasks with natural language
 
-> **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md) · [File Attachments](docs/07-file-attachments-setup.md) · [Task Management](docs/08-task-management-setup.md)
+> **Quick links:** [Core Setup](docs/01-getting-started.md) · [Discord](docs/03-discord-capture-setup.md) · [Teams](docs/02-teams-capture-setup.md) · [Alexa](docs/04-alexa-setup.md) · [iMessage](docs/10-imessage-setup.md) · [Reminders](docs/05-reminders-setup.md) · [Digest](docs/06-daily-digest-setup.md) · [File Attachments](docs/07-file-attachments-setup.md) · [Task Management](docs/08-task-management-setup.md)
 >
 > **🤖 Using an AI coding tool?** [AI-Guided Setup](docs/09-ai-guided-setup.md) — Let your AI walk you through the deployment step by step.
 
@@ -62,6 +62,7 @@ The setup guide covers:
 | **Microsoft Teams** | DM or @mention the Cerebro bot | [Teams Setup](docs/02-teams-capture-setup.md) |
 | **Discord** | `/capture` and `/search` slash commands | [Discord Setup](docs/03-discord-capture-setup.md) |
 | **Alexa** | "Alexa, tell cerebro …" voice commands | [Alexa Setup](docs/04-alexa-setup.md) |
+| **iMessage** | Text commands via BlueBubbles (Mac server + Cloudflare tunnel) | [iMessage Setup](docs/10-imessage-setup.md) |
 
 ## Features
 
@@ -110,7 +111,7 @@ by describing them — Cerebro uses AI to match the right one.
 ```
 docs/           — Setup guides and documentation
 extensions/     — Feature extensions (coming soon)
-integrations/   — MCP server, Teams capture, Discord capture, Alexa voice, daily digest
+integrations/   — MCP server, Teams capture, Discord capture, Alexa voice, iMessage capture, daily digest
 schemas/        — Database schemas and migrations
 ```
 
