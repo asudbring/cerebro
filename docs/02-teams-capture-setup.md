@@ -239,8 +239,56 @@ Before moving on, confirm all of these pass:
 
 ---
 
+## Access Control
+
+By default Cerebro processes messages from any user in your Teams tenant. To
+restrict it to specific users, set the `TEAMS_ALLOWED_SENDERS` secret to a
+comma-separated list of Azure AD Object IDs:
+
+```bash
+supabase secrets set TEAMS_ALLOWED_SENDERS=aad-object-id-1,aad-object-id-2
+```
+
+Look up a user's AAD Object ID with Azure CLI:
+
+```bash
+az ad user show --id user@example.com --query id -o tsv
+```
+
+When the allowlist is set, unauthorized senders receive a friendly rejection
+message. When the secret is empty or unset, all users are allowed (future
+multi-user mode).
+
+### Teams Admin Policy (Optional)
+
+For an additional layer of protection, create a Teams app permission policy that
+blocks Cerebro for everyone except authorized users:
+
+1. **Block globally:** Add Cerebro to the Global policy's
+   `PrivateCatalogApps` blocked list via Teams PowerShell
+2. **Allow per-user:** Create a `Cerebro-Allowed` policy with an empty block
+   list and assign it to authorized users
+
+```powershell
+# Block Cerebro in Global policy
+$blockedApp = New-Object Microsoft.Teams.Policy.Administration.Cmdlets.Core.PrivateCatalogApp
+$blockedApp.Id = "<cerebro-org-app-id>"
+$blockedList = [System.Collections.Generic.List[Microsoft.Teams.Policy.Administration.Cmdlets.Core.PrivateCatalogApp]]::new()
+$blockedList.Add($blockedApp)
+Set-CsTeamsAppPermissionPolicy -Identity 'Global' -PrivateCatalogAppsType 'BlockedAppList' -PrivateCatalogApps $blockedList
+
+# Create allow policy and assign to a user
+New-CsTeamsAppPermissionPolicy -Identity 'Cerebro-Allowed'
+Grant-CsTeamsAppPermissionPolicy -Identity 'user@example.com' -PolicyName 'Cerebro-Allowed'
+```
+
+---
+
 ## Calendar Reminders
 
-When you capture a thought that mentions a future date or time (e.g. "remind me to check the deployment logs next Friday at 10am"), Cerebro can automatically create calendar events on O365 and/or Google Calendar.
+When you capture a thought that mentions a future date or time (e.g. "remind me
+to check the deployment logs next Friday at 10am"), Cerebro can automatically
+create calendar events on O365 and/or Google Calendar.
 
-See **[Reminders Setup](05-reminders-setup.md)** for configuration instructions.
+See **[Reminders Setup](05-reminders-setup.md)** for configuration
+instructions.

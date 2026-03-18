@@ -12,6 +12,12 @@ const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const BOT_APP_ID = Deno.env.get("TEAMS_BOT_APP_ID")!;
 const BOT_APP_SECRET = Deno.env.get("TEAMS_BOT_APP_SECRET")!;
 
+// Sender allowlist — comma-separated AAD Object IDs (empty = allow all)
+const TEAMS_ALLOWED_SENDERS = Deno.env.get("TEAMS_ALLOWED_SENDERS") || "";
+const allowedSenders = new Set(
+  TEAMS_ALLOWED_SENDERS.split(",").map((s) => s.trim()).filter(Boolean),
+);
+
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 // Single-tenant bot: use tenant-specific endpoints
@@ -847,6 +853,23 @@ app.post("*", async (c) => {
     // Only process message activities
     if (activity.type !== "message") {
       return c.json({}, 200);
+    }
+
+    // Sender allowlist check (empty list = allow all)
+    if (allowedSenders.size > 0) {
+      const senderAadId = activity.from?.aadObjectId;
+      if (!senderAadId || !allowedSenders.has(senderAadId)) {
+        const serviceUrl = activity.serviceUrl.endsWith("/")
+          ? activity.serviceUrl
+          : activity.serviceUrl + "/";
+        await replyToActivity(
+          serviceUrl,
+          activity.conversation.id,
+          activity.id,
+          "⛔ Sorry, you are not authorized to use Cerebro. Please contact your administrator.",
+        );
+        return c.json({}, 200);
+      }
     }
 
     const rawText: string = activity.text || "";
