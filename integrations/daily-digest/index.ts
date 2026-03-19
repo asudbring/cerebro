@@ -471,23 +471,23 @@ function markdownToHtml(markdown: string, title: string): string {
       continue;
     }
 
-    // Headers
-    if (trimmed.startsWith("### ")) {
+    // Headers (h1–h6)
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
       if (inUl) { outputLines.push("</ul>"); inUl = false; }
       if (inOl) { outputLines.push("</ol>"); inOl = false; }
-      outputLines.push(`<h3 style="color:#4a5568;margin:18px 0 8px;font-size:16px;">${inlineMarkdown(trimmed.slice(4))}</h3>`);
-      continue;
-    }
-    if (trimmed.startsWith("## ")) {
-      if (inUl) { outputLines.push("</ul>"); inUl = false; }
-      if (inOl) { outputLines.push("</ol>"); inOl = false; }
-      outputLines.push(`<h2 style="color:#2d3748;margin:22px 0 10px;font-size:18px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">${inlineMarkdown(trimmed.slice(3))}</h2>`);
-      continue;
-    }
-    if (trimmed.startsWith("# ")) {
-      if (inUl) { outputLines.push("</ul>"); inUl = false; }
-      if (inOl) { outputLines.push("</ol>"); inOl = false; }
-      outputLines.push(`<h2 style="color:#2d3748;margin:22px 0 10px;font-size:20px;">${inlineMarkdown(trimmed.slice(2))}</h2>`);
+      const level = headingMatch[1].length;
+      const text = inlineMarkdown(headingMatch[2]);
+      const styles: Record<number, string> = {
+        1: "color:#2d3748;margin:22px 0 10px;font-size:20px;",
+        2: "color:#2d3748;margin:22px 0 10px;font-size:18px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;",
+        3: "color:#4a5568;margin:18px 0 8px;font-size:16px;",
+        4: "color:#4a5568;margin:14px 0 6px;font-size:15px;",
+        5: "color:#718096;margin:12px 0 4px;font-size:14px;",
+        6: "color:#718096;margin:10px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:0.5px;",
+      };
+      const tag = level <= 2 ? "h2" : level <= 4 ? "h3" : "h4";
+      outputLines.push(`<${tag} style="${styles[level]}">${text}</${tag}>`);
       continue;
     }
 
