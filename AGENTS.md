@@ -43,8 +43,8 @@ Cerebro is a cloud-based personal knowledge store. It pairs a Supabase PostgreSQ
 ### Supabase Project
 
 - **Project ref:** `YOUR_PROJECT_REF` (us-west-2)
-- **6 Edge Functions:** cerebro-mcp, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
-- **Auth:** `x-brain-key` header or `?key=` query param
+- **7 Edge Functions:** cerebro-mcp, cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
+- **Auth:** `x-brain-key` header or `?key=` query param (primary MCP); OAuth 2.1 via Entra ID (read-only MCP)
 - **All functions** use Deno + Hono framework, deployed via `npx supabase functions deploy <name> --no-verify-jwt`
 
 ### Mac Server (iMessage Infrastructure)
@@ -59,10 +59,11 @@ Cerebro is a cloud-based personal knowledge store. It pairs a Supabase PostgreSQ
 
 ```text
 cerebro/
-├── docs/                        # Setup guides (01 through 10)
+├── docs/                        # Setup guides (01 through 11)
 ├── extensions/                  # Feature extensions (future)
 ├── integrations/
-│   ├── mcp-server/              # Core MCP server (7 tools)
+│   ├── mcp-server/              # Core MCP server (7 tools, API key auth)
+│   ├── mcp-server-readonly/     # Read-only MCP server (3 tools, OAuth via Entra ID)
 │   ├── teams-capture/           # Microsoft Teams bot (Bot Framework)
 │   ├── discord-capture/         # Discord bot (slash commands)
 │   ├── alexa-capture/           # Alexa voice skill (HTTPS endpoint)

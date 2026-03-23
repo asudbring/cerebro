@@ -40,6 +40,7 @@ Review the decision tree below, decide which features you want, and make sure yo
 | **Digest email delivery** | [Resend account](https://resend.com) (free — 100 emails/day) |
 | **File Attachments** | Supabase Storage bucket (free — 1 GB included) |
 | **Task Management** | No additional accounts needed (free) |
+| **Read-Only MCP (OAuth)** | Microsoft Entra ID tenant + Azure CLI |
 
 > **Tip:** If you're setting up Teams capture AND O365 calendar reminders, you'll reuse the same Entra ID app registration for both — just add the `Calendars.ReadWrite` permission when you get to Phase 3.
 
@@ -470,6 +471,38 @@ This is covered in the digest guide under **Email Setup with Resend**.
 
 ---
 
+## Phase 7: Read-Only MCP Server with OAuth (OPTIONAL)
+
+Share **read-only** access to your brain via a second MCP server protected by **Microsoft Entra ID OAuth** — no static API keys.
+
+### Phase 7 Prerequisites
+
+| Prerequisite | Why |
+|-------------|-----|
+| Core infrastructure (Phase 1) complete | Database and primary MCP server must exist |
+| Microsoft Entra ID tenant | OAuth authentication provider |
+| Azure CLI installed and logged in | For creating the app registration |
+
+### Phase 7 Steps
+
+1. Create an Entra ID app registration (single tenant, SPA + Web redirect URIs)
+2. Generate a signing secret for server-issued tokens
+3. Deploy `integrations/mcp-server-readonly/` Edge Function
+4. Set Supabase secrets (`MCP_READONLY_TENANT_ID`, `MCP_READONLY_CLIENT_ID`, `MCP_READONLY_SIGNING_SECRET`)
+5. Connect MCP clients — OAuth flow handles authentication automatically
+
+📖 Full guide → [Read-Only MCP Setup](11-readonly-mcp-setup.md)
+
+### 🚦 Read-Only MCP Verification Gate
+
+- [ ] Health endpoint returns `{"status":"ok","service":"cerebro-mcp-readonly","auth":"oauth"}`
+- [ ] OAuth metadata at `/.well-known/oauth-authorization-server` returns valid JSON
+- [ ] Unauthenticated request returns 401 with `WWW-Authenticate` header
+- [ ] After OAuth login, search returns results
+- [ ] Only 3 read-only tools available (no capture, complete, reopen, or delete)
+
+---
+
 ## You're Done! 🎉
 
 Your Cerebro brain is now operational. Here's what you've built:
@@ -484,6 +517,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | Email delivery | Optional |
 | File attachments | Optional |
 | Task management | Optional |
+| Read-only MCP with OAuth | Optional |
 
 ### Tips for Daily Use
 
@@ -514,6 +548,10 @@ Your Cerebro brain is now operational. Here's what you've built:
 | `RESEND_API_KEY` | Phase 4 | Digest email | If using email |
 | `DIGEST_EMAIL_TO` | Phase 4 | Digest email | If using email |
 | `DIGEST_EMAIL_FROM` | Phase 4 | Digest email | If using email |
+| `MCP_READONLY_TENANT_ID` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
+| `MCP_READONLY_CLIENT_ID` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
+| `MCP_READONLY_SIGNING_SECRET` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
+| `MCP_READONLY_ALLOWED_USERS` | Phase 7 | Read-only MCP OAuth | Optional user restriction |
 
 > **Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in all Supabase Edge Functions.
 >
