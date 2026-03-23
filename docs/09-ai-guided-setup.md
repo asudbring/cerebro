@@ -257,6 +257,7 @@ Don't rush through all phases at once. Each phase has a verification step — do
 | `integrations/alexa-capture/index.ts` | Alexa skill Edge Function |
 | `integrations/daily-digest/index.ts` | Digest generator Edge Function |
 | `integrations/mcp-server-readonly/index.ts` | Read-only MCP server (OAuth) |
+| `integrations/cloudflare-worker/src/index.ts` | OAuth discovery proxy (Cloudflare Worker) |
 
 ---
 

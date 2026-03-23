@@ -40,7 +40,7 @@ Review the decision tree below, decide which features you want, and make sure yo
 | **Digest email delivery** | [Resend account](https://resend.com) (free — 100 emails/day) |
 | **File Attachments** | Supabase Storage bucket (free — 1 GB included) |
 | **Task Management** | No additional accounts needed (free) |
-| **Read-Only MCP (OAuth)** | Microsoft Entra ID tenant + Azure CLI |
+| **Read-Only MCP (OAuth)** | Microsoft Entra ID tenant + Azure CLI + Cloudflare account with a domain |
 
 > **Tip:** If you're setting up Teams capture AND O365 calendar reminders, you'll reuse the same Entra ID app registration for both — just add the `Calendars.ReadWrite` permission when you get to Phase 3.
 
@@ -482,22 +482,25 @@ Share **read-only** access to your brain via a second MCP server protected by **
 | Core infrastructure (Phase 1) complete | Database and primary MCP server must exist |
 | Microsoft Entra ID tenant | OAuth authentication provider |
 | Azure CLI installed and logged in | For creating the app registration |
+| Cloudflare account with a domain | For the OAuth discovery proxy (custom domain required by MCP spec) |
 
 ### Phase 7 Steps
 
-1. Create an Entra ID app registration (single tenant, SPA + Web redirect URIs)
-2. Generate a signing secret for server-issued tokens
+1. Create an Entra ID app registration (single tenant, SPA redirect URIs, public client)
+2. Expose API with `Thoughts.Read` scope, preauthorize VS Code client ID
 3. Deploy `integrations/mcp-server-readonly/` Edge Function
-4. Set Supabase secrets (`MCP_READONLY_TENANT_ID`, `MCP_READONLY_CLIENT_ID`, `MCP_READONLY_SIGNING_SECRET`)
-5. Connect MCP clients — OAuth flow handles authentication automatically
+4. Deploy `integrations/cloudflare-worker/` Cloudflare Worker (OAuth discovery proxy at custom domain)
+5. Set Supabase secrets (`MCP_READONLY_TENANT_ID`, `MCP_READONLY_CLIENT_ID`)
+6. Connect MCP clients — VS Code handles OAuth flow automatically
 
 📖 Full guide → [Read-Only MCP Setup](11-readonly-mcp-setup.md)
 
 ### 🚦 Read-Only MCP Verification Gate
 
-- [ ] Health endpoint returns `{"status":"ok","service":"cerebro-mcp-readonly","auth":"oauth"}`
-- [ ] OAuth metadata at `/.well-known/oauth-authorization-server` returns valid JSON
+- [ ] Health endpoint returns `{"status":"ok","service":"cerebro-mcp-readonly","auth":"entra-id"}`
+- [ ] OAuth discovery at `/.well-known/oauth-protected-resource` returns JSON pointing to Entra ID
 - [ ] Unauthenticated request returns 401 with `WWW-Authenticate` header
+- [ ] VS Code OAuth flow triggers Entra ID login
 - [ ] After OAuth login, search returns results
 - [ ] Only 3 read-only tools available (no capture, complete, reopen, or delete)
 
@@ -550,7 +553,6 @@ Your Cerebro brain is now operational. Here's what you've built:
 | `DIGEST_EMAIL_FROM` | Phase 4 | Digest email | If using email |
 | `MCP_READONLY_TENANT_ID` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
 | `MCP_READONLY_CLIENT_ID` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
-| `MCP_READONLY_SIGNING_SECRET` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
 | `MCP_READONLY_ALLOWED_USERS` | Phase 7 | Read-only MCP OAuth | Optional user restriction |
 
 > **Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in all Supabase Edge Functions.

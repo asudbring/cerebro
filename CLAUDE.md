@@ -27,7 +27,8 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - **Database:** Supabase (PostgreSQL + pgvector) — `thoughts` table with 1536-dim embeddings
 - **AI Gateway:** OpenRouter — embeddings via `text-embedding-3-small`, metadata extraction via `gpt-4o-mini`, PDF/document analysis via `gemini-2.0-flash`, image vision via `gpt-4o-mini`
 - **MCP Server (Primary):** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`
-- **MCP Server (Read-Only):** Separate Edge Function with 3 read-only tools (`search_thoughts`, `list_thoughts`, `thought_stats`), authenticated via OAuth 2.1 with Entra ID
+- **MCP Server (Read-Only):** Separate Edge Function with 3 read-only tools (`search_thoughts`, `list_thoughts`, `thought_stats`), authenticated via OAuth 2.1 with Entra ID. Accessed through Cloudflare Worker proxy at `mcp.yourdomain.com` which serves OAuth discovery docs at domain root.
+- **Cloudflare Worker (OAuth Proxy):** `mcp.yourdomain.com` — serves MCP OAuth discovery documents (RFC 9728 Protected Resource Metadata) and proxies MCP requests to the Supabase Edge Function
 - **iMessage Capture:** BlueBubbles on Mac server + Cloudflare named tunnel → Supabase Edge Function
 - **Auth:** Access key via `x-brain-key` header or `?key=` query param
 
@@ -61,7 +62,9 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `docs/08-task-management-setup.md` — Task management setup guide
 - `docs/09-ai-guided-setup.md` — AI coding tool deployment workflow
 - `integrations/imessage-capture/index.ts` — iMessage capture via BlueBubbles (text commands, file attachments)
-- `integrations/mcp-server-readonly/index.ts` — Read-only MCP server with OAuth (Entra ID)
+- `integrations/mcp-server-readonly/index.ts` — Read-only MCP server with OAuth (Entra ID token validation)
+- `integrations/cloudflare-worker/src/index.ts` — Cloudflare Worker OAuth discovery proxy
+- `integrations/cloudflare-worker/wrangler.toml` — Worker deployment config
 - `schemas/core/006-imessage-digest.sql` — iMessage digest channel migration
 - `docs/10-imessage-setup.md` — iMessage/BlueBubbles setup guide
 - `docs/11-readonly-mcp-setup.md` — Read-only MCP server with OAuth setup guide

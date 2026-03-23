@@ -6,3 +6,6 @@ supabase/
 .env.local
 *.log
 .vscode/
+
+# Cloudflare Wrangler cache
+.wrangler/

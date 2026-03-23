@@ -19,15 +19,11 @@ const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const ENTRA_TENANT_ID = Deno.env.get("MCP_READONLY_TENANT_ID")!;
 const ENTRA_CLIENT_ID = Deno.env.get("MCP_READONLY_CLIENT_ID")!;
 
-// Signing secret for server-issued tokens
-const SIGNING_SECRET = Deno.env.get("MCP_READONLY_SIGNING_SECRET")!;
-
 // Optional: comma-separated list of allowed Entra ID user Object IDs
 const ALLOWED_USERS = Deno.env.get("MCP_READONLY_ALLOWED_USERS") || "";
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
-const ENTRA_BASE = `https://login.microsoftonline.com/${ENTRA_TENANT_ID}`;
-const ENTRA_JWKS_URI = `${ENTRA_BASE}/discovery/v2.0/keys`;
+const ENTRA_JWKS_URI = `https://login.microsoftonline.com/${ENTRA_TENANT_ID}/discovery/v2.0/keys`;
 const ENTRA_ISSUER = `https://login.microsoftonline.com/${ENTRA_TENANT_ID}/v2.0`;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -36,12 +32,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 let jwksCache: jose.JSONWebKeySet | null = null;
 let jwksCacheTime = 0;
 const JWKS_CACHE_TTL = 3600_000; // 1 hour
-
-// In-memory dynamic client registration store
-const registeredClients = new Map<
-  string,
-  { client_id: string; client_name?: string; redirect_uris: string[] }
->();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,38 +48,6 @@ async function getJWKS(): Promise<jose.JSONWebKeySet> {
   return jwksCache!;
 }
 
-async function validateEntraToken(token: string): Promise<jose.JWTPayload> {
-  const jwks = jose.createLocalJWKSet(await getJWKS());
-  const { payload } = await jose.jwtVerify(token, jwks, {
-    issuer: ENTRA_ISSUER,
-    audience: ENTRA_CLIENT_ID,
-  });
-  return payload;
-}
-
-async function validateServerToken(token: string): Promise<jose.JWTPayload> {
-  const secret = new TextEncoder().encode(SIGNING_SECRET);
-  const { payload } = await jose.jwtVerify(token, secret, {
-    issuer: "cerebro-mcp-readonly",
-  });
-  return payload;
-}
-
-async function issueServerToken(
-  sub: string,
-  name: string,
-): Promise<{ access_token: string; expires_in: number }> {
-  const secret = new TextEncoder().encode(SIGNING_SECRET);
-  const expiresIn = 3600; // 1 hour
-  const token = await new jose.SignJWT({ sub, name })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setIssuer("cerebro-mcp-readonly")
-    .setExpirationTime(`${expiresIn}s`)
-    .sign(secret);
-  return { access_token: token, expires_in: expiresIn };
-}
-
 async function validateBearerToken(
   authHeader: string | undefined,
 ): Promise<{ valid: boolean; sub?: string; name?: string; error?: string }> {
@@ -98,29 +56,21 @@ async function validateBearerToken(
   }
   const token = authHeader.slice(7);
 
-  // Try server-issued token first, then Entra ID token
   try {
-    const payload = await validateServerToken(token);
-    return {
-      valid: true,
-      sub: payload.sub,
-      name: (payload as Record<string, unknown>).name as string,
-    };
-  } catch {
-    // Not a server token — try Entra ID token directly
-  }
+    const jwks = jose.createLocalJWKSet(await getJWKS());
+    const { payload } = await jose.jwtVerify(token, jwks, {
+      issuer: ENTRA_ISSUER,
+      audience: [ENTRA_CLIENT_ID, `api://${ENTRA_CLIENT_ID}`],
+    });
 
-  try {
-    const payload = await validateEntraToken(token);
-    const sub = payload.sub || payload.oid as string;
+    const sub = (payload.oid || payload.sub) as string;
     const name = (payload as Record<string, unknown>).name as string ||
       (payload as Record<string, unknown>).preferred_username as string || "unknown";
 
     // Check allowed users if configured
     if (ALLOWED_USERS) {
       const allowed = ALLOWED_USERS.split(",").map((s) => s.trim());
-      const oid = (payload.oid || payload.sub) as string;
-      if (!allowed.includes(oid)) {
+      if (!allowed.includes(sub)) {
         return { valid: false, error: "User not authorized" };
       }
     }
@@ -129,16 +79,6 @@ async function validateBearerToken(
   } catch (err) {
     return { valid: false, error: `Token validation failed: ${(err as Error).message}` };
   }
-}
-
-function getBaseUrl(_requestUrl: string): string {
-  // Supabase Edge Functions see http:// internally; always use the public HTTPS URL
-  return "https://YOUR_PROJECT_REF.supabase.co";
-}
-
-// Public function URL prefix (Supabase strips /functions/v1 internally)
-function getFnUrl(): string {
-  return `${getBaseUrl("")}/functions/v1/cerebro-mcp-readonly`;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,299 +422,29 @@ server.registerTool(
 );
 
 // ---------------------------------------------------------------------------
-// Hono App — OAuth + MCP
+// Hono App — MCP with Entra ID Bearer Token auth
 // ---------------------------------------------------------------------------
 
-const FN_PATH = "/cerebro-mcp-readonly";
-const app = new Hono().basePath(FN_PATH);
+const app = new Hono().basePath("/cerebro-mcp-readonly");
 
-// Health check
+// Health check (public)
 app.get("/health", (c) => {
-  return c.json({ status: "ok", service: "cerebro-mcp-readonly", auth: "oauth" });
+  return c.json({ status: "ok", service: "cerebro-mcp-readonly", auth: "entra-id" });
 });
 
-// ---------------------------------------------------------------------------
-// OAuth Authorization Server Metadata (RFC 8414)
-// ---------------------------------------------------------------------------
-
-app.get(
-  "/.well-known/oauth-authorization-server",
-  (c) => {
-    const fnUrl = getFnUrl();
-    return c.json({
-      issuer: fnUrl,
-      authorization_endpoint: `${fnUrl}/authorize`,
-      token_endpoint: `${fnUrl}/token`,
-      registration_endpoint: `${fnUrl}/register`,
-      response_types_supported: ["code"],
-      grant_types_supported: ["authorization_code", "refresh_token"],
-      code_challenge_methods_supported: ["S256"],
-      token_endpoint_auth_methods_supported: ["none"],
-      scopes_supported: ["openid", "profile"],
-    });
-  },
-);
-
-// ---------------------------------------------------------------------------
-// Dynamic Client Registration (RFC 7591)
-// ---------------------------------------------------------------------------
-
-app.post("/register", async (c) => {
-  try {
-    const body = await c.req.json();
-    const clientId = crypto.randomUUID();
-    const client = {
-      client_id: clientId,
-      client_name: body.client_name || "MCP Client",
-      redirect_uris: body.redirect_uris || ["http://localhost/callback"],
-    };
-    registeredClients.set(clientId, client);
-    return c.json({
-      client_id: client.client_id,
-      client_name: client.client_name,
-      redirect_uris: client.redirect_uris,
-      grant_types: ["authorization_code"],
-      response_types: ["code"],
-      token_endpoint_auth_method: "none",
-    }, 201);
-  } catch {
-    return c.json({ error: "invalid_client_metadata" }, 400);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Authorization Endpoint — Redirect to Entra ID
-// ---------------------------------------------------------------------------
-
-// In-memory store for pending authorization codes
-const pendingCodes = new Map<
-  string,
-  {
-    entraCode: string;
-    redirectUri: string;
-    codeChallenge?: string;
-    codeChallengeMethod?: string;
-    clientId: string;
-    expiresAt: number;
-  }
->();
-
-app.get("/authorize", (c) => {
-  const url = new URL(c.req.url);
-  const clientId = url.searchParams.get("client_id") || "";
-  const redirectUri = url.searchParams.get("redirect_uri") || "http://localhost/callback";
-  const state = url.searchParams.get("state") || "";
-  const codeChallenge = url.searchParams.get("code_challenge") || "";
-  const codeChallengeMethod = url.searchParams.get("code_challenge_method") || "S256";
-  const scope = url.searchParams.get("scope") || "openid profile";
-
-  // Build state that encodes our metadata so the callback can reconstruct
-  const serverState = btoa(
-    JSON.stringify({
-      clientId,
-      redirectUri,
-      codeChallenge,
-      codeChallengeMethod,
-      originalState: state,
-    }),
-  );
-
-  const callbackUrl = `${getFnUrl()}/callback`;
-  const entraAuthUrl = new URL(`${ENTRA_BASE}/oauth2/v2.0/authorize`);
-  entraAuthUrl.searchParams.set("client_id", ENTRA_CLIENT_ID);
-  entraAuthUrl.searchParams.set("response_type", "code");
-  entraAuthUrl.searchParams.set("redirect_uri", callbackUrl);
-  entraAuthUrl.searchParams.set("scope", "openid profile email");
-  entraAuthUrl.searchParams.set("state", serverState);
-  entraAuthUrl.searchParams.set("response_mode", "query");
-
-  return c.redirect(entraAuthUrl.toString());
-});
-
-// ---------------------------------------------------------------------------
-// OAuth Callback — Entra ID redirects here after user login
-// ---------------------------------------------------------------------------
-
-app.get("/callback", async (c) => {
-  const url = new URL(c.req.url);
-  const entraCode = url.searchParams.get("code");
-  const stateParam = url.searchParams.get("state") || "";
-  const error = url.searchParams.get("error");
-
-  if (error) {
-    const errorDesc = url.searchParams.get("error_description") || "";
-    return c.text(`Authorization failed: ${error} - ${errorDesc}`, 400);
-  }
-
-  if (!entraCode) {
-    return c.text("Missing authorization code", 400);
-  }
-
-  // Decode the state to get the original client info
-  let stateData: {
-    clientId: string;
-    redirectUri: string;
-    codeChallenge: string;
-    codeChallengeMethod: string;
-    originalState: string;
-  };
-  try {
-    stateData = JSON.parse(atob(stateParam));
-  } catch {
-    return c.text("Invalid state parameter", 400);
-  }
-
-  const callbackUrl = `${getFnUrl()}/callback`;
-
-  const tokenResp = await fetch(`${ENTRA_BASE}/oauth2/v2.0/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: ENTRA_CLIENT_ID,
-      grant_type: "authorization_code",
-      code: entraCode,
-      redirect_uri: callbackUrl,
-      scope: "openid profile email",
-    }),
-  });
-
-  if (!tokenResp.ok) {
-    const errBody = await tokenResp.text();
-    return c.text(`Token exchange failed: ${errBody}`, 500);
-  }
-
-  const tokenData = await tokenResp.json();
-  const idToken = tokenData.id_token;
-
-  // Validate the ID token to get user info
-  let userPayload: jose.JWTPayload;
-  try {
-    const jwks = jose.createLocalJWKSet(await getJWKS());
-    const { payload } = await jose.jwtVerify(idToken, jwks, {
-      issuer: ENTRA_ISSUER,
-      audience: ENTRA_CLIENT_ID,
-    });
-    userPayload = payload;
-  } catch (err) {
-    return c.text(`ID token validation failed: ${(err as Error).message}`, 500);
-  }
-
-  // Check allowed users
-  const oid = (userPayload.oid || userPayload.sub) as string;
-  if (ALLOWED_USERS) {
-    const allowed = ALLOWED_USERS.split(",").map((s) => s.trim());
-    if (!allowed.includes(oid)) {
-      return c.text("User not authorized for this MCP server", 403);
-    }
-  }
-
-  // Generate a short-lived server authorization code
-  const serverCode = crypto.randomUUID();
-  pendingCodes.set(serverCode, {
-    entraCode,
-    redirectUri: stateData.redirectUri,
-    codeChallenge: stateData.codeChallenge,
-    codeChallengeMethod: stateData.codeChallengeMethod,
-    clientId: stateData.clientId,
-    expiresAt: Date.now() + 300_000, // 5 minutes
-  });
-
-  // Store user info for token issuance
-  pendingCodes.set(`user:${serverCode}`, {
-    entraCode: oid,
-    redirectUri: (userPayload as Record<string, unknown>).name as string ||
-      (userPayload as Record<string, unknown>).preferred_username as string || "user",
-    codeChallenge: "",
-    codeChallengeMethod: "",
-    clientId: "",
-    expiresAt: Date.now() + 300_000,
-  });
-
-  // Redirect back to the MCP client with our server code
-  const clientRedirect = new URL(stateData.redirectUri);
-  clientRedirect.searchParams.set("code", serverCode);
-  if (stateData.originalState) {
-    clientRedirect.searchParams.set("state", stateData.originalState);
-  }
-
-  return c.redirect(clientRedirect.toString());
-});
-
-// ---------------------------------------------------------------------------
-// Token Endpoint — Exchange server code for access token
-// ---------------------------------------------------------------------------
-
-app.post("/token", async (c) => {
-  const body = await c.req.parseBody();
-  const grantType = body.grant_type as string;
-  const code = body.code as string;
-  const codeVerifier = body.code_verifier as string;
-
-  if (grantType !== "authorization_code") {
-    return c.json({ error: "unsupported_grant_type" }, 400);
-  }
-
-  if (!code) {
-    return c.json({ error: "invalid_request", error_description: "Missing code" }, 400);
-  }
-
-  const pending = pendingCodes.get(code);
-  if (!pending || pending.expiresAt < Date.now()) {
-    pendingCodes.delete(code);
-    return c.json({ error: "invalid_grant", error_description: "Code expired or invalid" }, 400);
-  }
-
-  // Verify PKCE code_verifier if code_challenge was provided
-  if (pending.codeChallenge && codeVerifier) {
-    const encoder = new TextEncoder();
-    const digest = await crypto.subtle.digest("SHA-256", encoder.encode(codeVerifier));
-    const computed = btoa(String.fromCharCode(...new Uint8Array(digest)))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-
-    if (computed !== pending.codeChallenge) {
-      pendingCodes.delete(code);
-      return c.json({ error: "invalid_grant", error_description: "PKCE verification failed" }, 400);
-    }
-  }
-
-  // Get stored user info
-  const userInfo = pendingCodes.get(`user:${code}`);
-  const sub = userInfo?.entraCode || "unknown";
-  const name = userInfo?.redirectUri || "user";
-
-  // Clean up
-  pendingCodes.delete(code);
-  pendingCodes.delete(`user:${code}`);
-
-  // Issue server access token
-  const { access_token, expires_in } = await issueServerToken(sub, name);
-
-  return c.json({
-    access_token,
-    token_type: "Bearer",
-    expires_in,
-  });
-});
-
-// ---------------------------------------------------------------------------
-// MCP Endpoints — Protected by Bearer Token
-// ---------------------------------------------------------------------------
-
+// MCP Endpoints — Protected by Entra ID Bearer Token
 app.all("*", async (c) => {
-  // Check for Bearer token
   const auth = c.req.header("Authorization");
   const result = await validateBearerToken(auth);
 
   if (!result.valid) {
-    const fnUrl = getFnUrl();
     return c.json(
       { error: "unauthorized", message: result.error },
       {
         status: 401,
         headers: {
-          "WWW-Authenticate": `Bearer resource_metadata="${fnUrl}/.well-known/oauth-authorization-server"`,
+          "WWW-Authenticate":
+            'Bearer resource_metadata="https://mcp.yourdomain.com/.well-known/oauth-protected-resource"',
         },
       },
     );

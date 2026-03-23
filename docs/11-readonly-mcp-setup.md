@@ -6,14 +6,49 @@ Deploy a second MCP server that provides **read-only access** to your Cerebro br
 
 - **Read-only access** — search, list, and stats only (no capture, complete, or delete)
 - **OAuth authentication** — users authenticate via your Entra ID tenant (browser login)
-- **Separate URL** — independent from the primary MCP server
+- **No API keys** — pure OAuth 2.1 flow, no static secrets for clients
 - **User restrictions** — optionally limit access to specific Entra ID users
+
+## Architecture
+
+```text
+MCP Client (VS Code, Claude, etc.)
+    │
+    │ 1. Connect to mcp.yourdomain.com → 401 + WWW-Authenticate
+    │ 2. Discover /.well-known/oauth-protected-resource
+    │ 3. Follow to Entra ID authorization server
+    │ 4. Authorization Code + PKCE → Entra ID login
+    │ 5. Token issued by Entra ID
+    │ 6. MCP requests with Bearer token
+    │
+    ▼
+Cloudflare Worker (mcp.yourdomain.com)
+    │
+    │ Serves OAuth discovery docs at domain root
+    │ Proxies MCP requests to Supabase
+    │
+    ▼
+cerebro-mcp-readonly (Supabase Edge Function)
+    │
+    │ Validates Entra ID JWT via JWKS
+    │ 3 read-only tools only
+    │
+    ▼
+Supabase PostgreSQL + pgvector
+    │
+    ▼
+OpenRouter (embeddings for search only)
+```
+
+> **Why the Cloudflare Worker?** The MCP OAuth spec requires clients to discover authorization server metadata at the **domain root** (`/.well-known/oauth-protected-resource`). Supabase Edge Functions live at sub-paths (`/functions/v1/name`), so a lightweight proxy at the domain root serves the discovery documents and forwards MCP requests to Supabase.
 
 ## What You Need
 
 - Working Cerebro setup ([Getting Started](01-getting-started.md) completed)
-- Microsoft Entra ID tenant (you already have this from your Azure setup)
+- Microsoft Entra ID tenant
 - Azure CLI installed and logged in (`az login`)
+- Cloudflare account with a domain (for the OAuth discovery proxy)
+- Node.js and npm (for Wrangler CLI)
 
 ## Credential Tracker
 
@@ -25,10 +60,11 @@ ENTRA ID APP REGISTRATION
   Application (client) ID:  ____________ <- Step 1
   Tenant ID:                ____________ <- Step 1
   Object ID:                ____________ <- Step 1
+  App ID URI:               ____________ <- Step 2
+  Thoughts.Read scope ID:   ____________ <- Step 2
 
-CEREBRO
-  Signing Secret:           ____________ <- Step 2
-  Edge Function URL:        ____________ <- Step 3
+CLOUDFLARE
+  Domain/subdomain:         ____________ <- Step 4 (e.g., mcp.yourdomain.com)
 
 --------------------------------------
 ```
@@ -37,63 +73,76 @@ CEREBRO
 
 ## Step 1: Create an Entra ID App Registration
 
-This creates the OAuth identity that users authenticate against.
-
 1. Go to the [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations**
 2. Click **New registration**
 3. Configure:
    - **Name:** `Cerebro Read-Only MCP`
    - **Supported account types:** **Accounts in this organizational directory only (Single tenant)**
-   - **Redirect URI:** skip for now
+   - **Redirect URI:** Select **Single-page application** and add `http://localhost`
 4. Click **Register**
+5. Copy into your credential tracker: **Application (client) ID**, **Directory (tenant) ID**, **Object ID**
 
-Copy into your credential tracker:
+### Add Redirect URIs
 
-- **Application (client) ID**
-- **Directory (tenant) ID**
-- **Object ID**
-
-### Configure Redirect URIs
-
-1. In your app registration, go to **Authentication**
-2. Click **Add a platform** → **Single-page application**
-3. Add these redirect URIs:
+1. Go to **Authentication** → **Single-page application** section
+2. Add these redirect URIs:
    - `http://localhost`
    - `http://localhost/callback`
    - `http://127.0.0.1/callback`
-4. Click **Add a platform** → **Web**
-5. Add this redirect URI:
-   - `https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly/callback`
-6. Under **Implicit grant and hybrid flows**, check:
-   - ✅ **Access tokens**
-   - ✅ **ID tokens**
-7. Click **Save**
+   - `https://vscode.dev/redirect`
+3. Click **Save**
 
-> **Why two platform types?** The SPA URIs support MCP clients doing PKCE-based OAuth flows locally. The Web URI supports the server-side callback from Entra ID.
+### Enable Public Client Flows
 
-### No Client Secret Needed
+1. In **Authentication**, scroll to **Advanced settings**
+2. Set **Allow public client flows** to **Yes**
+3. Click **Save**
 
-This app uses the **Authorization Code + PKCE** flow (public client), so no client secret is required. The server-side code exchange uses the SPA configuration which doesn't require a secret.
+> **Why public client?** MCP clients like VS Code use the Authorization Code + PKCE flow without a client secret. This setting allows that.
 
 ---
 
-## Step 2: Generate a Signing Secret
+## Step 2: Expose the API and Preauthorize VS Code
 
-The read-only server issues its own short-lived JWT tokens after validating users with Entra ID. You need a secret to sign these tokens.
+### Set the Application ID URI
 
-**Mac/Linux:**
+1. Go to **Expose an API**
+2. Click **Set** next to Application ID URI
+3. Accept the default (`api://YOUR_CLIENT_ID`) or customize
+4. Click **Save**
+
+### Add the Thoughts.Read Scope
+
+1. Click **Add a scope**
+2. Configure:
+   - **Scope name:** `Thoughts.Read`
+   - **Who can consent:** Admins and users
+   - **Admin consent display name:** Read Cerebro thoughts
+   - **Admin consent description:** Allows read-only access to search, list, and view thought statistics
+3. Click **Add scope**
+4. Copy the **Scope ID** into your credential tracker
+
+### Set Access Token Version to v2
+
+This is required for JWT-format tokens. Use Azure CLI:
 
 ```bash
-openssl rand -hex 32
+# Replace OBJECT_ID with your app's Object ID
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/OBJECT_ID" \
+  --body '{"api":{"requestedAccessTokenVersion":2}}'
 ```
 
-**Windows (PowerShell):**
+### Preauthorize VS Code
 
-```powershell
--join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
-```
+**This is critical.** VS Code uses its own client ID to request tokens. You must preauthorize it:
 
-Save the output in your credential tracker.
+1. In **Expose an API**, click **Add a client application**
+2. Enter VS Code's client ID: `aebc6443-996d-45c2-90f0-388ff96faa56`
+3. Check the box next to your `Thoughts.Read` scope
+4. Click **Add application**
+
+> **Without this step**, VS Code will fail with `AADSTS65002: Consent between first party application and first party resource must be configured via preauthorization`.
 
 ---
 
@@ -102,19 +151,16 @@ Save the output in your credential tracker.
 ### Set Your Secrets
 
 ```bash
-supabase secrets set MCP_READONLY_TENANT_ID=your-entra-tenant-id
-supabase secrets set MCP_READONLY_CLIENT_ID=your-app-client-id
-supabase secrets set MCP_READONLY_SIGNING_SECRET=your-signing-secret-from-step-2
+npx supabase secrets set MCP_READONLY_TENANT_ID=your-entra-tenant-id
+npx supabase secrets set MCP_READONLY_CLIENT_ID=your-app-client-id
 ```
 
 > `OPENROUTER_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` should already be set from the initial setup.
 
 ### Optional: Restrict to Specific Users
 
-To limit access to specific Entra ID users, set their Object IDs:
-
 ```bash
-supabase secrets set MCP_READONLY_ALLOWED_USERS=user-object-id-1,user-object-id-2
+npx supabase secrets set MCP_READONLY_ALLOWED_USERS=user-object-id-1,user-object-id-2
 ```
 
 Look up a user's Object ID:
@@ -123,196 +169,160 @@ Look up a user's Object ID:
 az ad user show --id user@example.com --query id -o tsv
 ```
 
-When the allowlist is set, unauthorized users receive a 403 after authenticating. When unset, any user in your tenant can access the read-only server.
-
-### Create and Deploy the Function
+### Deploy
 
 ```bash
-supabase functions new cerebro-mcp-readonly
-```
+# Copy source to deploy directory
+cp integrations/mcp-server-readonly/index.ts supabase/functions/cerebro-mcp-readonly/index.ts
+cp integrations/mcp-server-readonly/deno.json supabase/functions/cerebro-mcp-readonly/deno.json
 
-Copy the contents of [`integrations/mcp-server-readonly/deno.json`](../integrations/mcp-server-readonly/deno.json) into `supabase/functions/cerebro-mcp-readonly/deno.json`.
-
-Copy the contents of [`integrations/mcp-server-readonly/index.ts`](../integrations/mcp-server-readonly/index.ts) into `supabase/functions/cerebro-mcp-readonly/index.ts`.
-
-Deploy:
-
-```bash
-supabase functions deploy cerebro-mcp-readonly --no-verify-jwt
-```
-
-Your read-only MCP server is now live at:
-
-```text
-https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly
+# Deploy
+npx supabase functions deploy cerebro-mcp-readonly --no-verify-jwt
 ```
 
 ---
 
-## Step 4: Connect Your AI Client
+## Step 4: Deploy the Cloudflare Worker
 
-### Claude Desktop (OAuth Flow)
+The Worker serves OAuth discovery documents at your domain root and proxies MCP requests to Supabase.
 
-1. Open Claude Desktop → **Settings** → **Connectors**
-2. Click **Add custom connector**
-3. Name: `Cerebro (Read-Only)`
-4. Remote MCP server URL: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly`
-5. Click **Add**
+### Create DNS Record
 
-When you start a conversation, Claude will prompt you to authenticate via your Entra ID login page. After logging in, the read-only tools become available.
+1. In your Cloudflare dashboard, go to your domain's DNS settings
+2. Add a record:
+   - **Type:** AAAA
+   - **Name:** `mcp` (or your chosen subdomain)
+   - **Content:** `100::`
+   - **Proxy status:** Proxied (orange cloud)
 
-### Claude Code
-
-```bash
-claude mcp add --transport http cerebro-readonly \
-  https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly
-```
-
-Claude Code will handle the OAuth flow automatically when you first use a Cerebro tool.
-
-### Other Clients (Manual Token)
-
-For clients that don't support OAuth discovery, get a token manually:
+### Deploy the Worker
 
 ```bash
-# Get an access token from Entra ID
-az account get-access-token \
-  --resource YOUR_CLIENT_ID \
-  --tenant YOUR_TENANT_ID \
-  --query accessToken -o tsv
+cd integrations/cloudflare-worker
+
+# Login to Cloudflare (if not already)
+npx wrangler login
+
+# Edit wrangler.toml — update the zone name and route to match your domain
+# Then deploy
+npx wrangler deploy
 ```
 
-Then configure the MCP connection with the Bearer token:
+The Worker is configured in `integrations/cloudflare-worker/wrangler.toml`. Update the `zone_name` and route pattern to match your domain.
+
+### Verify the Worker
+
+```bash
+# Health (proxied to Supabase)
+curl https://mcp.yourdomain.com/health
+
+# OAuth discovery
+curl https://mcp.yourdomain.com/.well-known/oauth-protected-resource
+curl https://mcp.yourdomain.com/.well-known/oauth-authorization-server
+
+# Unauthenticated MCP request (should return 401)
+curl -X POST https://mcp.yourdomain.com/ -H "Content-Type: application/json"
+```
+
+---
+
+## Step 5: Connect Your AI Client
+
+### VS Code (Recommended)
+
+Add to your `mcp.json` (User or Workspace level):
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "cerebro-readonly": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly",
-        "--header",
-        "Authorization:Bearer ${MCP_TOKEN}"
-      ],
-      "env": {
-        "MCP_TOKEN": "paste-your-token-here"
-      }
+      "type": "http",
+      "url": "https://mcp.yourdomain.com/"
     }
   }
 }
 ```
 
-> **Note:** Entra ID tokens expire after ~1 hour. Re-run the `az` command to get a fresh token.
+When you start the server, VS Code will:
+1. Discover OAuth metadata at the domain root
+2. Redirect you to Entra ID login
+3. Exchange the token automatically
+4. Connect to the read-only MCP tools
 
----
-
-## Step 5: Test It
-
-### Health Check
-
-```bash
-curl https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly/health
-```
-
-Expected: `{"status":"ok","service":"cerebro-mcp-readonly","auth":"oauth"}`
-
-### OAuth Metadata
+### Claude Code
 
 ```bash
-curl https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly/.well-known/oauth-authorization-server
+claude mcp add --transport http cerebro-readonly https://mcp.yourdomain.com/
 ```
 
-Expected: JSON with `authorization_endpoint`, `token_endpoint`, etc.
+### Other Clients (Manual Token)
 
-### Unauthenticated Request
+For clients that don't support OAuth discovery:
 
 ```bash
-curl -X POST https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly
+az account get-access-token \
+  --resource api://YOUR_CLIENT_ID \
+  --tenant YOUR_TENANT_ID \
+  --query accessToken -o tsv
 ```
 
-Expected: 401 with `WWW-Authenticate: Bearer resource_metadata="..."` header.
-
-### Read-Only Verification
-
-After authenticating, try to use `capture_thought` — it should not be available. Only `search_thoughts`, `list_thoughts`, and `thought_stats` should appear in the tool list.
+Then pass as `Authorization: Bearer <token>` header. Tokens expire after ~1 hour.
 
 ---
 
 ## ✅ Verification Checklist
 
-Before moving on, confirm all of these pass:
-
-- [ ] **Health endpoint** — `/health` returns `{"status":"ok","service":"cerebro-mcp-readonly","auth":"oauth"}`
-- [ ] **OAuth metadata** — `/.well-known/oauth-authorization-server` returns valid JSON
-- [ ] **401 without token** — POST to the server without auth returns 401 with `WWW-Authenticate` header
-- [ ] **Authentication works** — connecting via an MCP client triggers Entra ID login
+- [ ] **Health endpoint** — `https://mcp.yourdomain.com/health` returns `{"status":"ok","service":"cerebro-mcp-readonly","auth":"entra-id"}`
+- [ ] **Protected Resource Metadata** — `/.well-known/oauth-protected-resource` returns JSON pointing to Entra ID
+- [ ] **Auth Server Metadata** — `/.well-known/oauth-authorization-server` returns Entra ID endpoints
+- [ ] **401 without token** — POST without auth returns 401 with `WWW-Authenticate: Bearer resource_metadata="..."`
+- [ ] **VS Code OAuth flow** — starting the server triggers Entra ID login prompt
 - [ ] **Search works** — after auth, searching returns results from your brain
-- [ ] **Read-only** — only 3 tools available (no capture, complete, reopen, or delete)
+- [ ] **Read-only** — only 3 tools available (search, list, stats)
 - [ ] **(Optional) User restriction** — if `MCP_READONLY_ALLOWED_USERS` is set, unauthorized users get 403
 
 ---
 
 ## Troubleshooting
 
-### OAuth metadata not found
+### AADSTS65002: Consent error
 
-- Verify the function deployed: visit the health endpoint in a browser
-- Check that the function name is exactly `cerebro-mcp-readonly`
+VS Code's client ID must be preauthorized in your app registration. Go to **Expose an API** → **Authorized client applications** and add `aebc6443-996d-45c2-90f0-388ff96faa56` with the `Thoughts.Read` scope.
 
-### Entra ID login fails
+### platform_broker_error
 
-- Verify redirect URIs in the app registration include the callback URL
-- Check that the app is configured as Single tenant and matches your tenant ID
-- Ensure ID tokens and access tokens are enabled under Authentication
+The Windows Auth Broker (WAM) fails when using `/common/v2.0` as the auth server endpoint. Ensure your OAuth metadata uses the tenant-specific endpoint: `https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0`.
+
+### OAuth discovery not found
+
+VS Code looks for discovery docs at the **domain root**, not at sub-paths. Ensure your Cloudflare Worker is deployed and the DNS record is pointing to it. Test: `curl https://mcp.yourdomain.com/.well-known/oauth-protected-resource`
 
 ### Token validation errors
 
 - Verify `MCP_READONLY_TENANT_ID` and `MCP_READONLY_CLIENT_ID` match your Entra ID app
-- Check that `MCP_READONLY_SIGNING_SECRET` is set
+- Ensure `requestedAccessTokenVersion` is set to `2` (for JWT format tokens)
+- Check that the audience in the token matches your app's client ID or `api://` URI
 
 ### "User not authorized" (403)
 
-- If `MCP_READONLY_ALLOWED_USERS` is set, verify the user's Object ID is in the list
-- Look up the Object ID: `az ad user show --id user@example.com --query id -o tsv`
+If `MCP_READONLY_ALLOWED_USERS` is set, verify the user's Object ID is in the list:
+```bash
+az ad user show --id user@example.com --query id -o tsv
+```
+
+### DNS not resolving
+
+If `mcp.yourdomain.com` doesn't resolve, check:
+- Cloudflare DNS record exists (AAAA → `100::`, proxied)
+- Your local DNS forwarders can reach public resolvers (1.1.1.1, 8.8.8.8)
+- Flush local DNS cache: `ipconfig /flushdns` (Windows) or `sudo dscacheutil -flushcache` (Mac)
 
 ### Search returns no results
 
 - Verify `OPENROUTER_API_KEY` is set and has credits
 - Try a broader search with a lower threshold
 
-### Token expired
-
-- Server-issued tokens expire after 1 hour
-- Reconnect via your MCP client to trigger a new OAuth flow
-- For manual tokens, re-run the `az` command
-
 ---
-
-## Architecture
-
-```text
-MCP Client (Claude, ChatGPT, etc.)
-    │
-    │ 1. Connect → 401 + WWW-Authenticate
-    │ 2. Discover OAuth metadata
-    │ 3. Authorization Code + PKCE → Entra ID login
-    │ 4. Callback → server code
-    │ 5. Exchange code → Bearer token
-    │ 6. MCP requests with Bearer token
-    │
-    ▼
-cerebro-mcp-readonly (Supabase Edge Function)
-    │
-    │ Validates JWT (server-issued or Entra ID direct)
-    │ 3 read-only tools only
-    │
-    ▼
-Supabase PostgreSQL + pgvector
-    │
-    ▼
-OpenRouter (embeddings for search only)
-```
 
 ## Environment Variables Reference
 
@@ -323,7 +333,6 @@ OpenRouter (embeddings for search only)
 | `OPENROUTER_API_KEY` | Yes | For generating search embeddings |
 | `MCP_READONLY_TENANT_ID` | Yes | Entra ID tenant ID |
 | `MCP_READONLY_CLIENT_ID` | Yes | Entra ID app client ID |
-| `MCP_READONLY_SIGNING_SECRET` | Yes | Secret for signing server JWT tokens |
 | `MCP_READONLY_ALLOWED_USERS` | No | Comma-separated Entra ID Object IDs to restrict access |
 
 ## Comparison: Primary vs Read-Only MCP Server
@@ -332,10 +341,11 @@ OpenRouter (embeddings for search only)
 | ------- | ------------- | ---------------------- |
 | Tools | 7 (read + write) | 3 (read only) |
 | Auth | Static API key (`x-brain-key`) | OAuth 2.1 (Entra ID) |
+| Proxy | None (direct to Supabase) | Cloudflare Worker at custom domain |
 | Capture | ✅ | ❌ |
 | Complete/Reopen/Delete | ✅ | ❌ |
 | Search | ✅ | ✅ |
 | List | ✅ | ✅ |
 | Stats | ✅ | ✅ |
 | Calendar reminders | ✅ | ❌ |
-| URL | `.../cerebro-mcp?key=...` | `.../cerebro-mcp-readonly` |
+| URL | `.../cerebro-mcp?key=...` | `https://mcp.yourdomain.com/` |
