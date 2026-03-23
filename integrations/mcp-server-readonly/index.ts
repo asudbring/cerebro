@@ -131,16 +131,14 @@ async function validateBearerToken(
   }
 }
 
-function getBaseUrl(requestUrl: string): string {
-  const url = new URL(requestUrl);
-  return `${url.protocol}//${url.host}`;
+function getBaseUrl(_requestUrl: string): string {
+  // Supabase Edge Functions see http:// internally; always use the public HTTPS URL
+  return "https://YOUR_PROJECT_REF.supabase.co";
 }
 
-function getFunctionPath(requestUrl: string): string {
-  const url = new URL(requestUrl);
-  // Extract the function base path (e.g., /functions/v1/cerebro-mcp-readonly)
-  const match = url.pathname.match(/^(\/functions\/v1\/[^/]+)/);
-  return match ? match[1] : url.pathname;
+// Public function URL prefix (Supabase strips /functions/v1 internally)
+function getFnUrl(): string {
+  return `${getBaseUrl("")}/functions/v1/cerebro-mcp-readonly`;
 }
 
 // ---------------------------------------------------------------------------
@@ -487,10 +485,11 @@ server.registerTool(
 // Hono App — OAuth + MCP
 // ---------------------------------------------------------------------------
 
-const app = new Hono();
+const FN_PATH = "/cerebro-mcp-readonly";
+const app = new Hono().basePath(FN_PATH);
 
 // Health check
-app.get("/functions/v1/cerebro-mcp-readonly/health", (c) => {
+app.get("/health", (c) => {
   return c.json({ status: "ok", service: "cerebro-mcp-readonly", auth: "oauth" });
 });
 
@@ -499,15 +498,14 @@ app.get("/functions/v1/cerebro-mcp-readonly/health", (c) => {
 // ---------------------------------------------------------------------------
 
 app.get(
-  "/functions/v1/cerebro-mcp-readonly/.well-known/oauth-authorization-server",
+  "/.well-known/oauth-authorization-server",
   (c) => {
-    const base = getBaseUrl(c.req.url);
-    const fnPath = `${base}/functions/v1/cerebro-mcp-readonly`;
+    const fnUrl = getFnUrl();
     return c.json({
-      issuer: fnPath,
-      authorization_endpoint: `${fnPath}/authorize`,
-      token_endpoint: `${fnPath}/token`,
-      registration_endpoint: `${fnPath}/register`,
+      issuer: fnUrl,
+      authorization_endpoint: `${fnUrl}/authorize`,
+      token_endpoint: `${fnUrl}/token`,
+      registration_endpoint: `${fnUrl}/register`,
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code", "refresh_token"],
       code_challenge_methods_supported: ["S256"],
@@ -517,28 +515,11 @@ app.get(
   },
 );
 
-// Serve metadata at root-relative path too (for spec-compliant clients)
-app.get("/.well-known/oauth-authorization-server", (c) => {
-  const base = getBaseUrl(c.req.url);
-  const fnPath = `${base}/functions/v1/cerebro-mcp-readonly`;
-  return c.json({
-    issuer: fnPath,
-    authorization_endpoint: `${fnPath}/authorize`,
-    token_endpoint: `${fnPath}/token`,
-    registration_endpoint: `${fnPath}/register`,
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
-    code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
-    scopes_supported: ["openid", "profile"],
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Dynamic Client Registration (RFC 7591)
 // ---------------------------------------------------------------------------
 
-app.post("/functions/v1/cerebro-mcp-readonly/register", async (c) => {
+app.post("/register", async (c) => {
   try {
     const body = await c.req.json();
     const clientId = crypto.randomUUID();
@@ -578,7 +559,7 @@ const pendingCodes = new Map<
   }
 >();
 
-app.get("/functions/v1/cerebro-mcp-readonly/authorize", (c) => {
+app.get("/authorize", (c) => {
   const url = new URL(c.req.url);
   const clientId = url.searchParams.get("client_id") || "";
   const redirectUri = url.searchParams.get("redirect_uri") || "http://localhost/callback";
@@ -598,10 +579,7 @@ app.get("/functions/v1/cerebro-mcp-readonly/authorize", (c) => {
     }),
   );
 
-  const base = getBaseUrl(c.req.url);
-  const callbackUrl = `${base}/functions/v1/cerebro-mcp-readonly/callback`;
-
-  // Redirect to Entra ID authorization endpoint
+  const callbackUrl = `${getFnUrl()}/callback`;
   const entraAuthUrl = new URL(`${ENTRA_BASE}/oauth2/v2.0/authorize`);
   entraAuthUrl.searchParams.set("client_id", ENTRA_CLIENT_ID);
   entraAuthUrl.searchParams.set("response_type", "code");
@@ -617,7 +595,7 @@ app.get("/functions/v1/cerebro-mcp-readonly/authorize", (c) => {
 // OAuth Callback — Entra ID redirects here after user login
 // ---------------------------------------------------------------------------
 
-app.get("/functions/v1/cerebro-mcp-readonly/callback", async (c) => {
+app.get("/callback", async (c) => {
   const url = new URL(c.req.url);
   const entraCode = url.searchParams.get("code");
   const stateParam = url.searchParams.get("state") || "";
@@ -646,9 +624,7 @@ app.get("/functions/v1/cerebro-mcp-readonly/callback", async (c) => {
     return c.text("Invalid state parameter", 400);
   }
 
-  // Exchange Entra ID code for tokens to validate the user
-  const base = getBaseUrl(c.req.url);
-  const callbackUrl = `${base}/functions/v1/cerebro-mcp-readonly/callback`;
+  const callbackUrl = `${getFnUrl()}/callback`;
 
   const tokenResp = await fetch(`${ENTRA_BASE}/oauth2/v2.0/token`, {
     method: "POST",
@@ -728,7 +704,7 @@ app.get("/functions/v1/cerebro-mcp-readonly/callback", async (c) => {
 // Token Endpoint — Exchange server code for access token
 // ---------------------------------------------------------------------------
 
-app.post("/functions/v1/cerebro-mcp-readonly/token", async (c) => {
+app.post("/token", async (c) => {
   const body = await c.req.parseBody();
   const grantType = body.grant_type as string;
   const code = body.code as string;
@@ -792,14 +768,13 @@ app.all("*", async (c) => {
   const result = await validateBearerToken(auth);
 
   if (!result.valid) {
-    const base = getBaseUrl(c.req.url);
-    const fnPath = `${base}/functions/v1/cerebro-mcp-readonly`;
+    const fnUrl = getFnUrl();
     return c.json(
       { error: "unauthorized", message: result.error },
       {
         status: 401,
         headers: {
-          "WWW-Authenticate": `Bearer resource_metadata="${fnPath}/.well-known/oauth-authorization-server"`,
+          "WWW-Authenticate": `Bearer resource_metadata="${fnUrl}/.well-known/oauth-authorization-server"`,
         },
       },
     );
