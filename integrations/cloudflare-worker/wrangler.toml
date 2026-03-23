@@ -4,6 +4,7 @@ compatibility_date = "2024-12-01"
 
 [vars]
 SUPABASE_FUNCTION_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly"
+SUPABASE_RW_FUNCTION_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp"
 ENTRA_TENANT_ID = "YOUR_ENTRA_TENANT_ID"
 ENTRA_CLIENT_ID = "YOUR_ENTRA_CLIENT_ID"
 

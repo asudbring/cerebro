@@ -122,6 +122,16 @@ CLOUDFLARE
 3. Click **Add scope**
 4. Copy the **Scope ID** into your credential tracker
 
+### Add the Thoughts.ReadWrite Scope (for primary server OAuth)
+
+1. Click **Add a scope** again
+2. Configure:
+   - **Scope name:** `Thoughts.ReadWrite`
+   - **Who can consent:** Admins and users
+   - **Admin consent display name:** Read and Write Cerebro thoughts
+   - **Admin consent description:** Allows full access to read, create, update, and delete thoughts
+3. Click **Add scope**
+
 ### Set Access Token Version to v2
 
 This is required for JWT-format tokens. Use Azure CLI:
@@ -139,7 +149,7 @@ az rest --method PATCH \
 
 1. In **Expose an API**, click **Add a client application**
 2. Enter VS Code's client ID: `aebc6443-996d-45c2-90f0-388ff96faa56`
-3. Check the box next to your `Thoughts.Read` scope
+3. Check the boxes next to your `Thoughts.Read` and `Thoughts.ReadWrite` scopes
 4. Click **Add application**
 
 > **Without this step**, VS Code will fail with `AADSTS65002: Consent between first party application and first party resource must be configured via preauthorization`.
@@ -340,12 +350,15 @@ If `mcp.yourdomain.com` doesn't resolve, check:
 | Feature | `cerebro-mcp` | `cerebro-mcp-readonly` |
 | ------- | ------------- | ---------------------- |
 | Tools | 7 (read + write) | 3 (read only) |
-| Auth | Static API key (`x-brain-key`) | OAuth 2.1 (Entra ID) |
-| Proxy | None (direct to Supabase) | Cloudflare Worker at custom domain |
+| Auth | OAuth 2.1 (Entra ID) + API key fallback | OAuth 2.1 (Entra ID) only |
+| Proxy | Cloudflare Worker at `/rw/` path | Cloudflare Worker at domain root |
 | Capture | ✅ | ❌ |
 | Complete/Reopen/Delete | ✅ | ❌ |
 | Search | ✅ | ✅ |
 | List | ✅ | ✅ |
 | Stats | ✅ | ✅ |
 | Calendar reminders | ✅ | ❌ |
-| URL | `.../cerebro-mcp?key=...` | `https://mcp.yourdomain.com/` |
+| OAuth URL | `https://mcp.yourdomain.com/rw/` | `https://mcp.yourdomain.com/` |
+| API key URL | Direct Supabase URL with `x-brain-key` | N/A |
+
+> **Note:** The primary server now supports OAuth via the same Cloudflare Worker. Connect to `mcp.yourdomain.com/rw/` for OAuth-authenticated access to all 7 tools. API-key clients can still use the direct Supabase URL or the Worker URL with `x-brain-key` header.

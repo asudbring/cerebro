@@ -1,11 +1,13 @@
-// Cloudflare Worker — OAuth discovery proxy for Cerebro Read-Only MCP
+// Cloudflare Worker — OAuth discovery proxy for Cerebro MCP servers
 //
 // Serves OAuth discovery documents at the domain root so MCP clients (VS Code)
-// can find Entra ID as the authorization server. Proxies all other requests
-// to the Supabase Edge Function.
+// can find Entra ID as the authorization server. Routes requests by path:
+//   /rw/*  → primary cerebro-mcp Edge Function (read-write, 7 tools)
+//   /*     → cerebro-mcp-readonly Edge Function (read-only, 3 tools)
 
 interface Env {
-  SUPABASE_FUNCTION_URL: string;
+  SUPABASE_FUNCTION_URL: string;         // read-only Edge Function URL
+  SUPABASE_RW_FUNCTION_URL: string;      // primary Edge Function URL
   ENTRA_TENANT_ID: string;
   ENTRA_CLIENT_ID: string;
 }
@@ -25,6 +27,7 @@ export default {
         ],
         scopes_supported: [
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.Read`,
+          `api://${env.ENTRA_CLIENT_ID}/Thoughts.ReadWrite`,
         ],
         bearer_methods_supported: ["header"],
       }, {
@@ -33,7 +36,6 @@ export default {
     }
 
     // --- OAuth Authorization Server Metadata (RFC 8414) ---
-    // Fallback for clients that check the domain root directly
     if (path === "/.well-known/oauth-authorization-server") {
       const entraBase = `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/v2.0`;
       return Response.json({
@@ -47,6 +49,7 @@ export default {
         token_endpoint_auth_methods_supported: ["none"],
         scopes_supported: [
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.Read`,
+          `api://${env.ENTRA_CLIENT_ID}/Thoughts.ReadWrite`,
         ],
       }, {
         headers: corsHeaders(request),
@@ -68,8 +71,15 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(request) });
     }
 
-    // --- Proxy everything else to Supabase Edge Function ---
-    const target = new URL(env.SUPABASE_FUNCTION_URL + path);
+    // --- Route to correct backend ---
+    // /rw/* → primary cerebro-mcp (read-write)
+    // /*    → cerebro-mcp-readonly
+    const isRW = path.startsWith("/rw");
+    const backendBase = isRW ? env.SUPABASE_RW_FUNCTION_URL : env.SUPABASE_FUNCTION_URL;
+    // Strip /rw prefix for the backend path
+    const backendPath = isRW ? path.replace(/^\/rw/, "") || "/" : path;
+
+    const target = new URL(backendBase + backendPath);
     target.search = url.search;
 
     const proxyHeaders = new Headers(request.headers);

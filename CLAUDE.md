@@ -26,11 +26,11 @@ schemas/        — Database schemas (core thoughts table + extensions)
 
 - **Database:** Supabase (PostgreSQL + pgvector) — `thoughts` table with 1536-dim embeddings
 - **AI Gateway:** OpenRouter — embeddings via `text-embedding-3-small`, metadata extraction via `gpt-4o-mini`, PDF/document analysis via `gemini-2.0-flash`, image vision via `gpt-4o-mini`
-- **MCP Server (Primary):** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`
+- **MCP Server (Primary):** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`. Supports dual auth: OAuth Bearer tokens (via Entra ID JWKS) and `x-brain-key` API key.
 - **MCP Server (Read-Only):** Separate Edge Function with 3 read-only tools (`search_thoughts`, `list_thoughts`, `thought_stats`), authenticated via OAuth 2.1 with Entra ID. Accessed through Cloudflare Worker proxy at `mcp.yourdomain.com` which serves OAuth discovery docs at domain root.
-- **Cloudflare Worker (OAuth Proxy):** `mcp.yourdomain.com` — serves MCP OAuth discovery documents (RFC 9728 Protected Resource Metadata) and proxies MCP requests to the Supabase Edge Function
+- **Cloudflare Worker (OAuth Proxy):** `mcp.yourdomain.com` — serves MCP OAuth discovery documents (RFC 9728 Protected Resource Metadata) and proxies MCP requests to Supabase Edge Functions. Routes `/rw/*` to primary server, `/*` to read-only server.
 - **iMessage Capture:** BlueBubbles on Mac server + Cloudflare named tunnel → Supabase Edge Function
-- **Auth:** Access key via `x-brain-key` header or `?key=` query param
+- **Auth:** OAuth 2.1 via Entra ID (both servers) + `x-brain-key` API key fallback (primary server only)
 
 ## Guard Rails
 

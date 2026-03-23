@@ -5,11 +5,60 @@ import { StreamableHTTPTransport } from "@hono/mcp";
 import { Hono } from "hono";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import * as jose from "jose";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const MCP_ACCESS_KEY = Deno.env.get("MCP_ACCESS_KEY")!;
+
+// Entra ID OAuth configuration (optional — enables Bearer token auth)
+const ENTRA_TENANT_ID = Deno.env.get("MCP_READONLY_TENANT_ID") || "";
+const ENTRA_CLIENT_ID = Deno.env.get("MCP_READONLY_CLIENT_ID") || "";
+const ENTRA_JWKS_URI = ENTRA_TENANT_ID
+  ? `https://login.microsoftonline.com/${ENTRA_TENANT_ID}/discovery/v2.0/keys`
+  : "";
+const ENTRA_ISSUER = ENTRA_TENANT_ID
+  ? `https://login.microsoftonline.com/${ENTRA_TENANT_ID}/v2.0`
+  : "";
+
+// JWKS cache for Bearer token validation
+let jwksCache: jose.JSONWebKeySet | null = null;
+let jwksCacheTime = 0;
+const JWKS_CACHE_TTL = 3600_000; // 1 hour
+
+async function getJWKS(): Promise<jose.JSONWebKeySet> {
+  if (jwksCache && Date.now() - jwksCacheTime < JWKS_CACHE_TTL) {
+    return jwksCache;
+  }
+  const r = await fetch(ENTRA_JWKS_URI);
+  if (!r.ok) throw new Error(`Failed to fetch JWKS: ${r.status}`);
+  jwksCache = await r.json();
+  jwksCacheTime = Date.now();
+  return jwksCache!;
+}
+
+async function validateBearerToken(
+  authHeader: string | undefined,
+): Promise<{ valid: boolean; error?: string }> {
+  if (!ENTRA_TENANT_ID || !ENTRA_CLIENT_ID) {
+    return { valid: false, error: "OAuth not configured" };
+  }
+  if (!authHeader?.startsWith("Bearer ")) {
+    return { valid: false, error: "Missing Bearer token" };
+  }
+  const token = authHeader.slice(7);
+  try {
+    const jwks = jose.createLocalJWKSet(await getJWKS());
+    await jose.jwtVerify(token, jwks, {
+      issuer: ENTRA_ISSUER,
+      audience: [ENTRA_CLIENT_ID, `api://${ENTRA_CLIENT_ID}`],
+    });
+    return { valid: true };
+  } catch (err) {
+    return { valid: false, error: `Token validation failed: ${(err as Error).message}` };
+  }
+}
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -799,11 +848,34 @@ server.registerTool(
 const app = new Hono();
 
 app.all("*", async (c) => {
-  const provided =
-    c.req.header("x-brain-key") ||
-    new URL(c.req.url).searchParams.get("key");
-  if (!provided || provided !== MCP_ACCESS_KEY) {
-    return c.json({ error: "Invalid or missing access key" }, 401);
+  let authenticated = false;
+
+  // Try OAuth Bearer token first
+  const authHeader = c.req.header("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const result = await validateBearerToken(authHeader);
+    authenticated = result.valid;
+  }
+
+  // Fall back to x-brain-key (header or query param)
+  if (!authenticated) {
+    const apiKey =
+      c.req.header("x-brain-key") ||
+      new URL(c.req.url).searchParams.get("key");
+    if (apiKey && apiKey === MCP_ACCESS_KEY) {
+      authenticated = true;
+    }
+  }
+
+  if (!authenticated) {
+    return c.json(
+      { error: "unauthorized", message: "Missing Bearer token" },
+      401,
+      {
+        "WWW-Authenticate":
+          'Bearer resource_metadata="https://mcp.yourdomain.com/.well-known/oauth-protected-resource"',
+      },
+    );
   }
 
   const transport = new StreamableHTTPTransport();

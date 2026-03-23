@@ -50,7 +50,7 @@ Read-Only MCP path (OAuth):
 
 - **Project ref:** `YOUR_PROJECT_REF` (us-west-2)
 - **7 Edge Functions:** cerebro-mcp, cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
-- **Auth:** `x-brain-key` header or `?key=` query param (primary MCP); OAuth 2.1 via Entra ID through Cloudflare Worker proxy (read-only MCP)
+- **Auth:** `x-brain-key` header or `?key=` query param (primary MCP); OAuth 2.1 via Entra ID through Cloudflare Worker proxy (both servers). Primary server supports dual auth (OAuth + API key).
 - **All functions** use Deno + Hono framework, deployed via `npx supabase functions deploy <name> --no-verify-jwt`
 
 ### Mac Server (iMessage Infrastructure)
@@ -68,9 +68,9 @@ cerebro/
 ├── docs/                        # Setup guides (01 through 11)
 ├── extensions/                  # Feature extensions (future)
 ├── integrations/
-│   ├── mcp-server/              # Core MCP server (7 tools, API key auth)
+│   ├── mcp-server/              # Core MCP server (7 tools, dual auth: OAuth + API key)
 │   ├── mcp-server-readonly/     # Read-only MCP server (3 tools, OAuth via Entra ID)
-│   ├── cloudflare-worker/       # OAuth discovery proxy for read-only MCP (mcp.yourdomain.com)
+│   ├── cloudflare-worker/       # OAuth discovery proxy (mcp.yourdomain.com) — routes /rw/ to primary, / to read-only
 │   ├── teams-capture/           # Microsoft Teams bot (Bot Framework)
 │   ├── discord-capture/         # Discord bot (slash commands)
 │   ├── alexa-capture/           # Alexa voice skill (HTTPS endpoint)
