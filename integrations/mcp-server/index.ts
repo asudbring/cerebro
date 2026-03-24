@@ -11,6 +11,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY")!;
 const MCP_ACCESS_KEY = Deno.env.get("MCP_ACCESS_KEY")!;
+const MCP_WORKER_URL = Deno.env.get("MCP_WORKER_URL") || "https://mcp.yourdomain.com";
 
 // Entra ID OAuth configuration (optional — enables Bearer token auth)
 const ENTRA_TENANT_ID = Deno.env.get("MCP_READONLY_TENANT_ID") || "";
@@ -873,7 +874,7 @@ app.all("*", async (c) => {
       401,
       {
         "WWW-Authenticate":
-          'Bearer resource_metadata="https://mcp.yourdomain.com/.well-known/oauth-protected-resource"',
+          'Bearer resource_metadata="' + MCP_WORKER_URL + '/.well-known/oauth-protected-resource"',
       },
     );
   }

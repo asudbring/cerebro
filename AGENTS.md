@@ -48,7 +48,7 @@ Read-Only MCP path (OAuth):
 
 ### Supabase Project
 
-- **Project ref:** `YOUR_PROJECT_REF` (us-west-2)
+- **Project ref:** `YOUR_PROJECT_REF` (set during Supabase project creation)
 - **7 Edge Functions:** cerebro-mcp, cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
 - **Auth:** `x-brain-key` header or `?key=` query param (primary MCP); OAuth 2.1 via Entra ID through Cloudflare Worker proxy (both servers). Primary server supports dual auth (OAuth + API key).
 - **All functions** use Deno + Hono framework, deployed via `npx supabase functions deploy <name> --no-verify-jwt`
@@ -57,7 +57,7 @@ Read-Only MCP path (OAuth):
 
 - **Host:** mac-server.example.com (Intel x86_64, macOS 15.7.4)
 - **BlueBubbles:** v1.9.9, Private API disabled, standard API only (SIP remains enabled)
-- **Cloudflare tunnel:** `bb.yourdomain.com` → localhost:1234 (named tunnel `cerebro-bb`)
+- **Cloudflare tunnel:** `bb.example.com` → localhost:1234 (named tunnel `cerebro-bb`)
 - **Launchd service:** `/Library/LaunchDaemons/com.cloudflare.cerebro-bb.plist`
 - **No Homebrew** — use direct binary downloads for package installs on this Mac
 
@@ -126,7 +126,7 @@ Credentials auto-load from `.env` in the project root. Connection details:
 
 - **Host:** aws-0-us-west-2.pooler.supabase.com (session pooler)
 - **Port:** 5432
-- **User:** postgres.YOUR_PROJECT_REF
+- **User:** `postgres.YOUR_PROJECT_REF`
 - **Database:** postgres
 - The direct hostname (`db.YOUR_PROJECT_REF.supabase.co`) requires IPv6 and won't resolve on most networks
 
@@ -199,12 +199,12 @@ curl --resolve YOUR_PROJECT_REF.supabase.co:443:CLOUDFLARE_IP \
 ### Teams (cerebro-teams)
 
 - Azure Bot Framework, single-tenant
-- Entra ID app: `YOUR_TEAMS_BOT_APP_ID`
-- Tenant: `YOUR_ENTRA_TENANT_ID` (yourtenantname)
+- Entra ID app: `<your-teams-bot-app-id>`
+- Tenant: `<your-entra-tenant-id>`
 
 ### Discord (cerebro-discord)
 
-- Application ID: `YOUR_DISCORD_APP_ID`
+- Application ID: `<your-discord-app-id>`
 - Uses slash commands (`/capture`, `/search`, `/stats`, etc.)
 
 ### Alexa (cerebro-alexa)
@@ -228,7 +228,7 @@ curl --resolve YOUR_PROJECT_REF.supabase.co:443:CLOUDFLARE_IP \
 
 - Generates daily/weekly summaries via AI
 - Delivers via email (Resend), Teams, Discord, and iMessage
-- Email recipients: <user@example.com>, <user@example.com>
+- Email recipients: configured via `DIGEST_EMAIL_RECIPIENTS` environment variable
 - Scheduled via pg_cron in Supabase
 
 ## Known Issues & Workarounds

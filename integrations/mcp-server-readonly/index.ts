@@ -21,6 +21,7 @@ const ENTRA_CLIENT_ID = Deno.env.get("MCP_READONLY_CLIENT_ID")!;
 
 // Optional: comma-separated list of allowed Entra ID user Object IDs
 const ALLOWED_USERS = Deno.env.get("MCP_READONLY_ALLOWED_USERS") || "";
+const MCP_WORKER_URL = Deno.env.get("MCP_WORKER_URL") || "https://mcp.yourdomain.com";
 
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 const ENTRA_JWKS_URI = `https://login.microsoftonline.com/${ENTRA_TENANT_ID}/discovery/v2.0/keys`;
@@ -444,7 +445,7 @@ app.all("*", async (c) => {
         status: 401,
         headers: {
           "WWW-Authenticate":
-            'Bearer resource_metadata="https://mcp.yourdomain.com/.well-known/oauth-protected-resource"',
+            'Bearer resource_metadata="' + MCP_WORKER_URL + '/.well-known/oauth-protected-resource"',
         },
       },
     );

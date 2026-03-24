@@ -32,7 +32,7 @@ if os.path.exists(_env_path):
 
 HOST = os.environ.get("SUPABASE_DB_HOST", "aws-0-us-west-2.pooler.supabase.com")
 PORT = int(os.environ.get("SUPABASE_DB_PORT", "5432"))
-USER = os.environ.get("SUPABASE_DB_USER", "postgres.YOUR_PROJECT_REF")
+USER = os.environ.get("SUPABASE_DB_USER", "")
 PASSWORD = os.environ.get("SUPABASE_DB_PASSWORD", "")
 DBNAME = os.environ.get("SUPABASE_DB_NAME", "postgres")
 
