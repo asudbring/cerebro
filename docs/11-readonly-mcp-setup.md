@@ -254,6 +254,7 @@ Add to your `mcp.json` (User or Workspace level):
 ```
 
 When you start the server, VS Code will:
+
 1. Discover OAuth metadata at the domain root
 2. Redirect you to Entra ID login
 3. Exchange the token automatically
@@ -316,6 +317,7 @@ VS Code looks for discovery docs at the **domain root**, not at sub-paths. Ensur
 ### "User not authorized" (403)
 
 If `MCP_READONLY_ALLOWED_USERS` is set, verify the user's Object ID is in the list:
+
 ```bash
 az ad user show --id user@example.com --query id -o tsv
 ```
@@ -323,6 +325,7 @@ az ad user show --id user@example.com --query id -o tsv
 ### DNS not resolving
 
 If `mcp.yourdomain.com` doesn't resolve, check:
+
 - Cloudflare DNS record exists (AAAA → `100::`, proxied)
 - Your local DNS forwarders can reach public resolvers (1.1.1.1, 8.8.8.8)
 - Flush local DNS cache: `ipconfig /flushdns` (Windows) or `sudo dscacheutil -flushcache` (Mac)
