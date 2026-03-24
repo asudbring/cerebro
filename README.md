@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/cerebro-logo.jpg" alt="Cerebro" width="300">
+  <img src=".github/cerebro-logo.jpg" alt="Cerebro" width="200">
 </p>
 
 <h1 align="center">Cerebro</h1>
