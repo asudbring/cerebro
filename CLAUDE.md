@@ -26,11 +26,11 @@ schemas/        — Database schemas (core thoughts table + extensions)
 
 - **Database:** Supabase (PostgreSQL + pgvector) — `thoughts` table with 1536-dim embeddings
 - **AI Gateway:** OpenRouter — embeddings via `text-embedding-3-small`, metadata extraction via `gpt-4o-mini`, PDF/document analysis via `gemini-2.0-flash`, image vision via `gpt-4o-mini`
-- **MCP Server (Primary):** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`. Supports dual auth: OAuth Bearer tokens (via Entra ID JWKS) and `x-brain-key` API key.
+- **MCP Server (Primary):** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`. Supports dual auth: OAuth Bearer tokens (via Entra ID JWKS) and `x-brain-key` header.
 - **MCP Server (Read-Only):** Separate Edge Function with 3 read-only tools (`search_thoughts`, `list_thoughts`, `thought_stats`), authenticated via OAuth 2.1 with Entra ID. Accessed through Cloudflare Worker proxy at `mcp.yourdomain.com` which serves OAuth discovery docs at domain root.
-- **Cloudflare Worker (OAuth Proxy):** `mcp.yourdomain.com` — serves MCP OAuth discovery documents (RFC 9728 Protected Resource Metadata) and proxies MCP requests to Supabase Edge Functions. Routes `/rw/*` to primary server, `/*` to read-only server.
+- **Cloudflare Worker (OAuth Proxy):** `mcp.yourdomain.com` — serves MCP OAuth discovery documents (RFC 9728 Protected Resource Metadata) and proxies MCP requests to Supabase Edge Functions. Routes `/rw/*` to primary server, `/*` to read-only server. Includes CORS origin allowlist and path traversal protection.
 - **iMessage Capture:** BlueBubbles on Mac server + Cloudflare named tunnel → Supabase Edge Function
-- **Auth:** OAuth 2.1 via Entra ID (both servers) + `x-brain-key` API key fallback (primary server only)
+- **Auth:** OAuth 2.1 via Entra ID (both servers) + `x-brain-key` header fallback (primary server only)
 
 ## Guard Rails
 
@@ -69,6 +69,8 @@ schemas/        — Database schemas (core thoughts table + extensions)
 - `docs/10-imessage-setup.md` — iMessage/BlueBubbles setup guide
 - `docs/11-readonly-mcp-setup.md` — Read-only MCP server with OAuth setup guide
 - `schemas/core/007-source-message-id.sql` — Source message ID for deduplication
+- `schemas/core/008-review-fixes.sql` — RLS policy, unique constraint, file_type validation
+- `schemas/core/009-fix-cron-settings.sql` — Cron jobs with current_setting fallback
 - `scripts/dbsql.py` — Pure-Python PostgreSQL client (bypasses libpq SCRAM issue with Supabase)
 - `LICENSE.md` — FSL-1.1-MIT terms
 

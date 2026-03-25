@@ -50,7 +50,7 @@ Read-Only MCP path (OAuth):
 
 - **Project ref:** `YOUR_PROJECT_REF` (set during Supabase project creation)
 - **7 Edge Functions:** cerebro-mcp, cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
-- **Auth:** `x-brain-key` header or `?key=` query param (primary MCP); OAuth 2.1 via Entra ID through Cloudflare Worker proxy (both servers). Primary server supports dual auth (OAuth + API key).
+- **Auth:** `x-brain-key` header (primary MCP); OAuth 2.1 via Entra ID through Cloudflare Worker proxy (both servers). Primary server supports dual auth (OAuth + API key).
 - **All functions** use Deno + Hono framework, deployed via `npx supabase functions deploy <name> --no-verify-jwt`
 
 ### Mac Server (iMessage Infrastructure)
@@ -68,16 +68,16 @@ cerebro/
 ├── docs/                        # Setup guides (01 through 11)
 ├── extensions/                  # Feature extensions (future)
 ├── integrations/
-│   ├── mcp-server/              # Core MCP server (7 tools, dual auth: OAuth + API key)
+│   ├── mcp-server/              # Core MCP server (7 tools, dual auth: OAuth + x-brain-key header)
 │   ├── mcp-server-readonly/     # Read-only MCP server (3 tools, OAuth via Entra ID)
-│   ├── cloudflare-worker/       # OAuth discovery proxy (mcp.yourdomain.com) — routes /rw/ to primary, / to read-only
+│   ├── cloudflare-worker/       # OAuth proxy (mcp.yourdomain.com) — CORS allowlist, path traversal protection
 │   ├── teams-capture/           # Microsoft Teams bot (Bot Framework)
 │   ├── discord-capture/         # Discord bot (slash commands)
 │   ├── alexa-capture/           # Alexa voice skill (HTTPS endpoint)
 │   ├── imessage-capture/        # iMessage via BlueBubbles webhooks
 │   └── daily-digest/            # Daily/weekly digest generator + delivery
 ├── schemas/
-│   └── core/                    # SQL migrations (schema.sql, 002–007)
+│   └── core/                    # SQL migrations (schema.sql, 002–009)
 ├── scripts/
 │   └── dbsql.py                 # Pure-Python PostgreSQL client
 ├── supabase/                    # Deployment copies (gitignored internals)
@@ -95,7 +95,7 @@ cerebro/
 - Use Supabase Secrets for all credentials (`npx supabase secrets set KEY=VALUE`)
 - Deploy all server functions as Supabase Edge Functions
 - Use sequential numbered migrations (e.g., `008-feature-name.sql`)
-- Run migrations via `python3 scripts/dbsql.py -f schemas/core/NNN-name.sql`
+- Run migrations via `npx supabase db query --linked < schemas/core/NNN-name.sql` or `python3 scripts/dbsql.py -f schemas/core/NNN-name.sql`
 - Copy integration source to `supabase/functions/<name>/` before deploying (containers don't follow symlinks)
 
 **DO NOT:**
@@ -105,11 +105,28 @@ cerebro/
 - Use `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, or unqualified `DELETE FROM` in SQL files
 - Add binary files over 1 MB to the repo
 - Introduce local servers, stdio transports, or `claude_desktop_config.json` setups
-- Use `psql` to connect to the database (broken — use `scripts/dbsql.py` instead)
+- Use `psql` to connect to the database (broken — use Supabase CLI or `scripts/dbsql.py` instead)
 
 ## Database Access
 
-**`psql` does NOT work** with this Supabase instance due to a libpq SCRAM-SHA-256 incompatibility with Supabase's Supavisor pooler. Use the included pure-Python client instead:
+**`psql` does NOT work** with this Supabase instance due to a libpq SCRAM-SHA-256 incompatibility with Supabase's Supavisor pooler.
+
+### Preferred: Supabase CLI (no credentials file needed)
+
+```bash
+# Run a query
+npx supabase db query "SELECT count(*) FROM thoughts" --linked
+
+# Run a migration file (PowerShell)
+Get-Content schemas/core/008-review-fixes.sql | npx supabase db query --linked
+
+# Run a migration file (bash)
+npx supabase db query --linked < schemas/core/008-review-fixes.sql
+```
+
+The CLI uses the linked project auth — no `.env` file required.
+
+### Alternative: Pure-Python client (requires .env)
 
 ```bash
 # Run a query
@@ -235,7 +252,7 @@ curl --resolve YOUR_PROJECT_REF.supabase.co:443:CLOUDFLARE_IP \
 
 ### psql / libpq Cannot Connect
 
-All libpq-based tools (psql, psycopg2, psycopg3) fail with "server closed the connection unexpectedly" against Supabase's Supavisor pooler. **Use `scripts/dbsql.py` instead.**
+All libpq-based tools (psql, psycopg2, psycopg3) fail with "server closed the connection unexpectedly" against Supabase's Supavisor pooler. **Use `npx supabase db query --linked` or `scripts/dbsql.py` instead.**
 
 ### BlueBubbles macOS Automation Permission (-1743)
 

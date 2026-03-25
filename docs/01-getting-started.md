@@ -274,10 +274,11 @@ Your MCP server is now live at:
 https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp
 ```
 
-Build your **MCP Connection URL**:
+Build your **MCP Connection URL** by setting the `x-brain-key` header to your access key:
 
 ```text
-https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp?key=your-access-key
+URL:  https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp
+Header:  x-brain-key: your-access-key
 ```
 
 Paste both into your credential tracker.
@@ -382,7 +383,7 @@ This should return the thought above, even though you searched for "Sarah" and t
 Check that the connector is added under Settings → Connectors and that it's toggled on for the current conversation.
 
 **401 errors on every request**
-The access key in the URL doesn't match what's stored in Supabase Secrets. Verify the `?key=` parameter is an exact copy of your `MCP_ACCESS_KEY`.
+The access key doesn't match what's stored in Supabase Secrets. Make sure your client sends the `x-brain-key` header with the exact value of your `MCP_ACCESS_KEY`.
 
 **Search comes back empty**
 Make sure you've captured at least one thought first. You can also try lowering the threshold: "search with threshold 0.3" casts a wider net.

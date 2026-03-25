@@ -256,8 +256,11 @@ Don't rush through all phases at once. Each phase has a verification step — do
 | `integrations/discord-capture/index.ts` | Discord bot Edge Function |
 | `integrations/alexa-capture/index.ts` | Alexa skill Edge Function |
 | `integrations/daily-digest/index.ts` | Digest generator Edge Function |
+| `integrations/imessage-capture/index.ts` | iMessage capture Edge Function |
 | `integrations/mcp-server-readonly/index.ts` | Read-only MCP server (OAuth) |
 | `integrations/cloudflare-worker/src/index.ts` | OAuth discovery proxy (Cloudflare Worker) |
+| `schemas/core/008-review-fixes.sql` | RLS policy, unique constraint, file\_type validation |
+| `schemas/core/009-fix-cron-settings.sql` | Cron jobs with current\_setting fallback |
 
 ---
 

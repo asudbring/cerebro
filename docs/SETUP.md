@@ -568,7 +568,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
 | 404 on Edge Function URL | Function not deployed | `supabase functions deploy <name> --no-verify-jwt` |
-| 401 from MCP server | Wrong access key | Check `MCP_ACCESS_KEY` matches your URL `?key=` param |
+| 401 from MCP server | Wrong access key | Check `MCP_ACCESS_KEY` matches `x-brain-key` header value |
 | Tools don't appear in Claude | Connector not added | Settings → Connectors → add the MCP Connection URL |
 | Discord commands missing | Propagation delay | Global commands take up to 1 hour; use guild-specific for instant |
 | Teams bot no reply | Wrong messaging endpoint | Azure Bot → Configuration → verify URL matches function |
