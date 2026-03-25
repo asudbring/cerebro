@@ -747,6 +747,20 @@ const app = new Hono();
 
 // POST: Triggered by pg_cron or manual invocation
 app.post("*", async (c) => {
+  // Authenticate: accept x-brain-key, Authorization Bearer, or apikey header.
+  // pg_cron scheduled calls send the Supabase service_role_key as Bearer token,
+  // so we accept both BRAIN_KEY and SUPABASE_SERVICE_ROLE_KEY.
+  const brainKey = Deno.env.get("BRAIN_KEY") || "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const providedKey =
+    c.req.header("x-brain-key") ||
+    c.req.header("authorization")?.replace("Bearer ", "") ||
+    c.req.header("apikey");
+  const validKeys = [brainKey, serviceRoleKey].filter(Boolean);
+  if (!providedKey || !validKeys.includes(providedKey)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   try {
     let period: "daily" | "weekly" = "daily";
 
@@ -774,6 +788,20 @@ app.post("*", async (c) => {
 
 // GET: Health check + on-demand digest generation
 app.get("*", async (c) => {
+  // Authenticate: accept x-brain-key, Authorization Bearer, or apikey header.
+  // pg_cron scheduled calls send the Supabase service_role_key as Bearer token,
+  // so we accept both BRAIN_KEY and SUPABASE_SERVICE_ROLE_KEY.
+  const brainKey = Deno.env.get("BRAIN_KEY") || "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const providedKey =
+    c.req.header("x-brain-key") ||
+    c.req.header("authorization")?.replace("Bearer ", "") ||
+    c.req.header("apikey");
+  const validKeys = [brainKey, serviceRoleKey].filter(Boolean);
+  if (!providedKey || !validKeys.includes(providedKey)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const period = c.req.query("period") === "weekly" ? "weekly" : "daily";
   const generate = c.req.query("generate");
 

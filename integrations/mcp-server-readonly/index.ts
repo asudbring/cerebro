@@ -103,6 +103,9 @@ async function getEmbedding(text: string): Promise<number[]> {
     throw new Error(`OpenRouter embeddings failed: ${r.status} ${msg}`);
   }
   const d = await r.json();
+  if (!d.data?.length || !d.data[0]?.embedding) {
+    throw new Error("Invalid embedding response from OpenRouter");
+  }
   return d.data[0].embedding;
 }
 

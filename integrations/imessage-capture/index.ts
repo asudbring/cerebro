@@ -1005,6 +1005,11 @@ app.post("*", async (c) => {
     const { error } = await supabase.from("thoughts").insert(insertData);
 
     if (error) {
+      // Unique constraint violation on source_message_id = successful dedup
+      if (error.code === "23505") {
+        console.log(`Duplicate detected on insert (source_message_id=${messageGuid}), skipping`);
+        return c.json({ status: "ok" });
+      }
       console.error("Supabase insert error:", error);
       await sendReply(chatGuid, `❌ Failed to capture: ${error.message}`);
       return c.json({ status: "ok" });

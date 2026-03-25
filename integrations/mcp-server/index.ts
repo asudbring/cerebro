@@ -81,6 +81,9 @@ async function getEmbedding(text: string): Promise<number[]> {
     throw new Error(`OpenRouter embeddings failed: ${r.status} ${msg}`);
   }
   const d = await r.json();
+  if (!d.data?.length || !d.data[0]?.embedding) {
+    throw new Error("Invalid embedding response from OpenRouter");
+  }
   return d.data[0].embedding;
 }
 
@@ -129,7 +132,14 @@ async function extractMetadata(
       ],
     }),
   });
+  if (!r.ok) {
+    const errText = await r.text().catch(() => "");
+    throw new Error(`OpenRouter metadata extraction failed: ${r.status} ${errText}`);
+  }
   const d = await r.json();
+  if (!d.choices?.length || !d.choices[0]?.message?.content) {
+    throw new Error("Invalid metadata response from OpenRouter");
+  }
   try {
     return JSON.parse(d.choices[0].message.content);
   } catch {
@@ -858,11 +868,9 @@ app.all("*", async (c) => {
     authenticated = result.valid;
   }
 
-  // Fall back to x-brain-key (header or query param)
+  // Fall back to x-brain-key header
   if (!authenticated) {
-    const apiKey =
-      c.req.header("x-brain-key") ||
-      new URL(c.req.url).searchParams.get("key");
+    const apiKey = c.req.header("x-brain-key");
     if (apiKey && apiKey === MCP_ACCESS_KEY) {
       authenticated = true;
     }

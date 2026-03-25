@@ -569,12 +569,11 @@ async function handleCapture(thought: string | undefined) {
 
     const { error } = await supabase.from("thoughts").insert({
       content: thought,
-      title: metadata.title,
-      thought_type: metadata.thought_type,
-      tags: metadata.tags,
-      people: metadata.people,
       embedding,
-      metadata: { source: "alexa" },
+      metadata: {
+        ...metadata,
+        source: "alexa",
+      },
     });
 
     if (error) throw error;

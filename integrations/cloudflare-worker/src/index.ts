@@ -79,11 +79,16 @@ export default {
     // Strip /rw prefix for the backend path
     const backendPath = isRW ? path.replace(/^\/rw/, "") || "/" : path;
 
+    // Reject path traversal attempts
+    if (backendPath.includes("..")) {
+      return new Response("Invalid path", { status: 400 });
+    }
+
     const target = new URL(backendBase + backendPath);
     target.search = url.search;
 
     const proxyHeaders = new Headers(request.headers);
-    proxyHeaders.set("Host", new URL(env.SUPABASE_FUNCTION_URL).host);
+    proxyHeaders.set("Host", new URL(backendBase).host);
     // Pass through the original origin for CORS
     proxyHeaders.set("X-Forwarded-Host", url.host);
     proxyHeaders.set("X-Forwarded-Proto", "https");
@@ -96,8 +101,7 @@ export default {
 
     // Rewrite the resource_metadata URL in 401 responses to use our domain
     const newHeaders = new Headers(resp.headers);
-    const wwwAuth = newHeaders.get("WWW-Authenticate");
-    if (wwwAuth && resp.status === 401) {
+    if (resp.status === 401) {
       newHeaders.set(
         "WWW-Authenticate",
         `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
@@ -117,8 +121,25 @@ export default {
 };
 
 function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get("Origin") || "";
+  const allowed = [
+    "https://vscode.dev",
+    "https://insiders.vscode.dev",
+    "https://github.dev",
+    "null",  // VS Code desktop sends null origin
+  ];
+  // Allow any origin from vscode extensions or localhost
+  const isAllowed = allowed.includes(origin)
+    || origin.startsWith("vscode-webview://")
+    || origin.startsWith("http://localhost")
+    || origin.startsWith("http://127.0.0.1");
+
+  const allowOrigin = origin
+    ? (isAllowed ? origin : "")
+    : "*";  // No Origin header → non-browser client, allow
+
   return {
-    "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, MCP-Protocol-Version",
     "Access-Control-Expose-Headers": "WWW-Authenticate",
