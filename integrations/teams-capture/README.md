@@ -52,7 +52,7 @@ Captured thoughts include Teams-specific metadata:
   "reminder_title": "",
   "reminder_datetime": "",
   "source": "teams",
-  "teams_sender": "Allen Sudbring",
+  "teams_sender": "Jane Doe",
   "teams_conversation_id": "..."
 }
 ```
