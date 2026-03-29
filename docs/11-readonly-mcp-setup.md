@@ -95,36 +95,54 @@ CLOUDFLARE
 3. Configure:
    - **Name:** `Cerebro Read-Only MCP`
    - **Supported account types:** **Accounts in this organizational directory only (Single tenant)**
-   - **Redirect URI:** Select **Single-page application** and add `http://localhost`
+   - **Redirect URI:** Leave blank (configured below)
 4. Click **Register**
 5. Copy into your credential tracker: **Application (client) ID**, **Directory (tenant) ID**, **Object ID**
 
 ### Add Redirect URIs
 
+**SPA section** — for VS Code Web only:
+
 1. Go to **Authentication** → **Single-page application** section
-2. Add these redirect URIs:
-   - `http://localhost`
-   - `http://localhost/callback`
-   - `http://127.0.0.1/callback`
+2. Add:
    - `https://vscode.dev/redirect`
 3. Click **Save**
 
-> **Claude Code and Open Code** use dynamic localhost ports for their OAuth callback. Registering `http://localhost` covers all ports when **Allow public client flows** is enabled (next step).
+> **Important:** Keep the SPA section minimal. CLI tools (Claude Code, Open Code, VS Code desktop) must use the public client section below. Registering localhost URIs in the SPA section causes `AADSTS9002327` because SPA tokens can only be redeemed via browser CORS — CLI apps POST directly to the token endpoint.
 
 ### Add Native/Public Client Redirect URIs
 
-VS Code desktop uses `http://127.0.0.1:<random-port>/` for its OAuth callback. Entra allows any port on `127.0.0.1` when `http://127.0.0.1` is registered in the **mobile and desktop applications** (public client) section — distinct from the SPA section above.
+All localhost and loopback URIs must go in the **mobile and desktop applications** (public client) section so CLI tools can redeem tokens directly.
 
-Use Azure CLI to add it:
+Use Azure CLI:
 
 ```bash
-# Get current publicClient redirectUris first, then add http://127.0.0.1
 az rest --method PATCH \
   --uri "https://graph.microsoft.com/v1.0/applications/YOUR_OBJECT_ID" \
-  --body '{"publicClient":{"redirectUris":["http://127.0.0.1","http://127.0.0.1:19876/mcp/oauth/callback"]}}'
+  --body '{
+    "publicClient": {
+      "redirectUris": [
+        "http://localhost",
+        "http://localhost/callback",
+        "http://127.0.0.1",
+        "http://127.0.0.1/callback",
+        "http://127.0.0.1:19876/mcp/oauth/callback",
+        "https://claude.com/api/mcp/auth_callback",
+        "https://claude.ai/api/mcp/auth_callback"
+      ]
+    }
+  }'
 ```
 
-> `http://127.0.0.1:19876/mcp/oauth/callback` is required for **Open Code** (opencode.ai), which uses a fixed port 19876. `http://127.0.0.1` (no port/path) covers VS Code's loopback callbacks on any random port.
+| URI | Used by |
+|-----|---------|
+| `http://localhost` | Claude Code (any port, loopback wildcard) |
+| `http://localhost/callback` | Generic CLI clients |
+| `http://127.0.0.1` | VS Code desktop (any random port) |
+| `http://127.0.0.1/callback` | Generic CLI clients |
+| `http://127.0.0.1:19876/mcp/oauth/callback` | Open Code (fixed port) |
+| `https://claude.com/api/mcp/auth_callback` | Claude.ai web |
+| `https://claude.ai/api/mcp/auth_callback` | Claude.ai web (alt domain) |
 
 ### Enable Public Client Flows
 
@@ -366,6 +384,21 @@ curl -s -X POST https://mcp.yourdomain.com/register \
 ### Resource metadata 'resource' does not match expected value
 
 VS Code's MCP SDK enforces RFC 9728 strict validation: the `resource` field must exactly match the URL being connected to. A client connecting to `https://mcp.yourdomain.com/rw/` fetches `/.well-known/oauth-protected-resource/rw/` and expects `resource: "https://mcp.yourdomain.com/rw/"`. The Worker handles this automatically by deriving the resource URL from the path suffix — ensure you're running the latest deployed Worker code.
+
+### AADSTS9002327: SPA tokens cannot be redeemed by CLI clients
+
+CLI tools (Claude Code, Open Code, VS Code desktop) POST directly to the token endpoint to redeem auth codes. Entra rejects this for redirect URIs registered in the **SPA** section — SPA tokens can only be redeemed via browser CORS requests.
+
+Fix: move all `localhost` and `127.0.0.1` redirect URIs from the SPA section to the **public client** (`publicClient.redirectUris`) section. Only `https://vscode.dev/redirect` belongs in SPA.
+
+```bash
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/YOUR_OBJECT_ID" \
+  --body '{
+    "spa": {"redirectUris": ["https://vscode.dev/redirect"]},
+    "publicClient": {"redirectUris": ["http://localhost","http://localhost/callback","http://127.0.0.1","http://127.0.0.1/callback","http://127.0.0.1:19876/mcp/oauth/callback"]}
+  }'
+```
 
 ### AADSTS50011: Redirect URI mismatch (VS Code random port)
 
