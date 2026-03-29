@@ -23,9 +23,16 @@ export default {
     const origin = url.origin; // https://mcp.yourdomain.com
 
     // --- Protected Resource Metadata (RFC 9728) ---
-    if (path === "/.well-known/oauth-protected-resource") {
+    // VS Code enforces exact match between `resource` and the URL being connected to.
+    // Clients connecting to /rw/ fetch /.well-known/oauth-protected-resource/rw/ and
+    // expect resource: "https://mcp.yourdomain.com/rw/". We derive the resource URL
+    // from the suffix after /.well-known/oauth-protected-resource.
+    if (path.startsWith("/.well-known/oauth-protected-resource")) {
+      const suffix = path.slice("/.well-known/oauth-protected-resource".length);
+      // Normalize: ensure trailing slash, treat empty/bare as root
+      const resourcePath = suffix ? (suffix.endsWith("/") ? suffix : suffix + "/") : "/";
       return Response.json({
-        resource: origin,
+        resource: `${origin}${resourcePath}`,
         authorization_servers: [origin],
         scopes_supported: [
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.Read`,
