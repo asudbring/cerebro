@@ -112,7 +112,7 @@ CLOUDFLARE
 2. Set **Allow public client flows** to **Yes**
 3. Click **Save**
 
-> **Why public client?** MCP clients like VS Code use the Authorization Code + PKCE flow without a client secret. This setting allows that.
+> **Why public client?** MCP clients like VS Code use the Authorization Code + PKCE flow without a client secret. This setting also enables `offline_access` — the OIDC scope that causes Entra to issue a refresh token so clients can stay authenticated without re-prompting every hour.
 
 ---
 
@@ -342,6 +342,10 @@ curl -s -X POST https://mcp.yourdomain.com/register \
 ---
 
 ## Troubleshooting
+
+### Re-authenticating on every tool open
+
+If you're prompted to log in every time you open a client, the access token expired and no refresh token was issued. This happens when `offline_access` is missing from the OAuth server's `scopes_supported`. The Worker now advertises `offline_access` — **re-authenticate once** to pick up a refresh token and clients will stay authenticated silently going forward (Entra refresh tokens last 90 days of inactivity).
 
 ### AADSTS9010010: Resource parameter mismatch
 
