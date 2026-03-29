@@ -104,7 +104,22 @@ CLOUDFLARE
    - `https://vscode.dev/redirect`
 3. Click **Save**
 
-> **Claude Code and Open Code** use dynamic localhost ports for their OAuth callback (e.g., `http://localhost:3000/callback`, `http://localhost:54321/callback`). Registering `http://localhost` covers all ports when **Allow public client flows** is enabled (next step).
+> **Claude Code and Open Code** use dynamic localhost ports for their OAuth callback. Registering `http://localhost` covers all ports when **Allow public client flows** is enabled (next step).
+
+### Add Native/Public Client Redirect URIs
+
+VS Code desktop uses `http://127.0.0.1:<random-port>/` for its OAuth callback. Entra allows any port on `127.0.0.1` when `http://127.0.0.1` is registered in the **mobile and desktop applications** (public client) section — distinct from the SPA section above.
+
+Use Azure CLI to add it:
+
+```bash
+# Get current publicClient redirectUris first, then add http://127.0.0.1
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/YOUR_OBJECT_ID" \
+  --body '{"publicClient":{"redirectUris":["http://127.0.0.1","http://127.0.0.1:19876/mcp/oauth/callback"]}}'
+```
+
+> `http://127.0.0.1:19876/mcp/oauth/callback` is required for **Open Code** (opencode.ai), which uses a fixed port 19876. `http://127.0.0.1` (no port/path) covers VS Code's loopback callbacks on any random port.
 
 ### Enable Public Client Flows
 
@@ -342,6 +357,16 @@ curl -s -X POST https://mcp.yourdomain.com/register \
 ---
 
 ## Troubleshooting
+
+### AADSTS50011: Redirect URI mismatch (VS Code random port)
+
+VS Code desktop picks a random port for its OAuth callback (e.g., `http://127.0.0.1:33418/`). This fails unless `http://127.0.0.1` is registered in the **public client** redirect URIs (not the SPA section). With `allowPublicClient: true` and `http://127.0.0.1` in `publicClient.redirectUris`, Entra applies RFC 8252 loopback rules and accepts any port dynamically.
+
+```bash
+az rest --method PATCH \
+  --uri "https://graph.microsoft.com/v1.0/applications/YOUR_OBJECT_ID" \
+  --body '{"publicClient":{"redirectUris":["http://127.0.0.1","http://127.0.0.1:19876/mcp/oauth/callback"]}}'
+```
 
 ### Re-authenticating on every tool open
 
