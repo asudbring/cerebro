@@ -30,6 +30,7 @@ export default {
         scopes_supported: [
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.Read`,
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.ReadWrite`,
+          "offline_access",
         ],
         bearer_methods_supported: ["header"],
       }, {
@@ -52,6 +53,7 @@ export default {
         scopes_supported: [
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.Read`,
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.ReadWrite`,
+          "offline_access",
         ],
       }, {
         headers: corsHeaders(request),
