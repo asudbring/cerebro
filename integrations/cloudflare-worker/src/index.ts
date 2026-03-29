@@ -51,7 +51,7 @@ export default {
         issuer: origin,
         authorization_endpoint: `${origin}/oauth/authorize`,
         token_endpoint: `${origin}/oauth/token`,
-        jwks_uri: `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/discovery/v2.0/keys`,
+        jwks_uri: `${origin}/.well-known/jwks.json`,
         registration_endpoint: `${origin}/register`,
         response_types_supported: ["code"],
         grant_types_supported: ["authorization_code"],
@@ -64,6 +64,18 @@ export default {
         ],
       }, {
         headers: corsHeaders(request),
+      });
+    }
+
+    // --- JWKS Proxy ---
+    // Proxy Entra's JWKS under our domain so VS Code doesn't fingerprint our
+    // server as Microsoft Entra and fall back to its built-in aebc6443 client ID.
+    if (path === "/.well-known/jwks.json") {
+      const jwksUrl = `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/discovery/v2.0/keys`;
+      const resp = await fetch(jwksUrl);
+      return new Response(resp.body, {
+        status: resp.status,
+        headers: { ...Object.fromEntries(resp.headers), ...corsHeaders(request) },
       });
     }
 
