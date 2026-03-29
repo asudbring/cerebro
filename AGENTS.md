@@ -71,7 +71,7 @@ cerebro/
 ├── integrations/
 │   ├── mcp-server/              # Core MCP server (7 tools, dual auth: OAuth + x-brain-key header)
 │   ├── mcp-server-readonly/     # Read-only MCP server (3 tools, OAuth via Entra ID)
-│   ├── cloudflare-worker/       # OAuth proxy (mcp.yourdomain.com) — DCR stub, OAuth authorize/token proxy (strips resource param for Entra), CORS allowlist, path traversal protection
+│   ├── cloudflare-worker/       # OAuth proxy (mcp.yourdomain.com) — DCR stub, path-specific RFC 9728 metadata, OAuth authorize/token proxy (strips resource param for Entra), CORS allowlist, path traversal protection
 │   ├── teams-capture/           # Microsoft Teams bot (Bot Framework)
 │   ├── discord-capture/         # Discord bot (slash commands)
 │   ├── alexa-capture/           # Alexa voice skill (HTTPS endpoint)

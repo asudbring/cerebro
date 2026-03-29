@@ -15,9 +15,10 @@ Deploy a second MCP server that provides **read-only access** to your Cerebro br
 ```text
 MCP Client (VS Code, Claude Code, Open Code, etc.)
     │
-    │ 1. Connect to mcp.yourdomain.com → 401 + WWW-Authenticate
-    │ 2. Discover /.well-known/oauth-protected-resource
-    │ 3. Follow to /.well-known/oauth-authorization-server
+    │ 1. Connect to mcp.yourdomain.com/rw/ → 401 + WWW-Authenticate
+    │ 2. Discover /.well-known/oauth-protected-resource/rw/  (path-specific)
+    │    → resource: "https://mcp.yourdomain.com/rw/"  (exact match per RFC 9728)
+    │ 3. Follow authorization_servers to /.well-known/oauth-authorization-server
     │ 4. (Claude Code / Open Code) POST /register → get client_id
     │ 5. GET /oauth/authorize → strips resource param → 302 to Entra
     │ 6. User logs in at Entra ID
@@ -28,18 +29,20 @@ MCP Client (VS Code, Claude Code, Open Code, etc.)
     ▼
 Cloudflare Worker (mcp.yourdomain.com)
     │
-    │ /.well-known/*    → OAuth discovery documents
-    │ POST /register    → DCR stub (RFC 7591) — returns Entra client_id
-    │ GET /oauth/authorize  → strips resource, redirects to Entra
-    │ POST /oauth/token     → strips resource, proxies to Entra token endpoint
-    │ /rw/*             → proxies to cerebro-mcp (primary, 7 tools)
-    │ /*                → proxies to cerebro-mcp-readonly (3 tools)
+    │ /.well-known/oauth-protected-resource[/path]
+    │                        → path-specific resource metadata (RFC 9728)
+    │ /.well-known/oauth-authorization-server
+    │                        → OAuth server metadata with registration_endpoint
+    │ POST /register         → DCR stub (RFC 7591) — returns Entra client_id
+    │ GET /oauth/authorize   → strips resource, redirects to Entra
+    │ POST /oauth/token      → strips resource, proxies to Entra token endpoint
+    │ /rw/*                  → proxies to cerebro-mcp (primary, 7 tools)
+    │ /*                     → proxies to cerebro-mcp-readonly (3 tools)
     │
     ▼
-cerebro-mcp-readonly (Supabase Edge Function)
+cerebro-mcp / cerebro-mcp-readonly (Supabase Edge Functions)
     │
     │ Validates Entra ID JWT via JWKS
-    │ 3 read-only tools only
     │
     ▼
 Supabase PostgreSQL + pgvector
@@ -53,6 +56,8 @@ OpenRouter (embeddings for search only)
 > **How DCR works here:** Entra ID doesn't natively support RFC 7591 Dynamic Client Registration. The Worker provides a stub `/register` endpoint that returns the pre-configured Entra `client_id` for every registration request. All clients share the same Entra public client app — which is safe because the PKCE flow never requires a client secret.
 
 > **Why proxy the OAuth endpoints?** The MCP SDK sends a `resource` parameter (RFC 8707) matching the server's origin URL (`https://mcp.yourdomain.com`). Entra ID rejects this with `AADSTS9010010` because the resource doesn't match the scope audience (`api://client-id`). The Worker's `/oauth/authorize` and `/oauth/token` endpoints strip the `resource` parameter before forwarding to Entra, resolving the conflict transparently.
+
+> **Path-specific resource metadata (RFC 9728):** VS Code's MCP SDK enforces an exact match between the `resource` field and the URL being connected to. A client connecting to `/rw/` fetches `/.well-known/oauth-protected-resource/rw/` and expects `resource: "https://mcp.yourdomain.com/rw/"`. The Worker derives the resource URL from the path suffix, so each sub-path gets the correct metadata automatically.
 
 ## What You Need
 
@@ -357,6 +362,10 @@ curl -s -X POST https://mcp.yourdomain.com/register \
 ---
 
 ## Troubleshooting
+
+### Resource metadata 'resource' does not match expected value
+
+VS Code's MCP SDK enforces RFC 9728 strict validation: the `resource` field must exactly match the URL being connected to. A client connecting to `https://mcp.yourdomain.com/rw/` fetches `/.well-known/oauth-protected-resource/rw/` and expects `resource: "https://mcp.yourdomain.com/rw/"`. The Worker handles this automatically by deriving the resource URL from the path suffix — ensure you're running the latest deployed Worker code.
 
 ### AADSTS50011: Redirect URI mismatch (VS Code random port)
 
