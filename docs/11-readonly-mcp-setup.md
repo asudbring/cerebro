@@ -6,26 +6,34 @@ Deploy a second MCP server that provides **read-only access** to your Cerebro br
 
 - **Read-only access** — search, list, and stats only (no capture, complete, or delete)
 - **OAuth authentication** — users authenticate via your Entra ID tenant (browser login)
+- **Dynamic Client Registration** — Claude Code, Open Code, and other DCR-capable clients register automatically (no manual client ID entry)
 - **No API keys** — pure OAuth 2.1 flow, no static secrets for clients
 - **User restrictions** — optionally limit access to specific Entra ID users
 
 ## Architecture
 
 ```text
-MCP Client (VS Code, Claude, etc.)
+MCP Client (VS Code, Claude Code, Open Code, etc.)
     │
     │ 1. Connect to mcp.yourdomain.com → 401 + WWW-Authenticate
     │ 2. Discover /.well-known/oauth-protected-resource
-    │ 3. Follow to Entra ID authorization server
-    │ 4. Authorization Code + PKCE → Entra ID login
-    │ 5. Token issued by Entra ID
-    │ 6. MCP requests with Bearer token
+    │ 3. Follow to /.well-known/oauth-authorization-server
+    │ 4. (Claude Code / Open Code) POST /register → get client_id
+    │ 5. GET /oauth/authorize → strips resource param → 302 to Entra
+    │ 6. User logs in at Entra ID
+    │ 7. POST /oauth/token → strips resource param → proxies to Entra
+    │ 8. Token issued by Entra ID
+    │ 9. MCP requests with Bearer token
     │
     ▼
 Cloudflare Worker (mcp.yourdomain.com)
     │
-    │ Serves OAuth discovery docs at domain root
-    │ Proxies MCP requests to Supabase
+    │ /.well-known/*    → OAuth discovery documents
+    │ POST /register    → DCR stub (RFC 7591) — returns Entra client_id
+    │ GET /oauth/authorize  → strips resource, redirects to Entra
+    │ POST /oauth/token     → strips resource, proxies to Entra token endpoint
+    │ /rw/*             → proxies to cerebro-mcp (primary, 7 tools)
+    │ /*                → proxies to cerebro-mcp-readonly (3 tools)
     │
     ▼
 cerebro-mcp-readonly (Supabase Edge Function)
@@ -40,7 +48,11 @@ Supabase PostgreSQL + pgvector
 OpenRouter (embeddings for search only)
 ```
 
-> **Why the Cloudflare Worker?** The MCP OAuth spec requires clients to discover authorization server metadata at the **domain root** (`/.well-known/oauth-protected-resource`). Supabase Edge Functions live at sub-paths (`/functions/v1/name`), so a lightweight proxy at the domain root serves the discovery documents and forwards MCP requests to Supabase.
+> **Why the Cloudflare Worker?** The MCP OAuth spec requires clients to discover authorization server metadata at the **domain root** (`/.well-known/oauth-protected-resource`). Supabase Edge Functions live at sub-paths (`/functions/v1/name`), so a lightweight proxy at the domain root serves the discovery documents, handles Dynamic Client Registration, proxies the OAuth flow, and forwards MCP requests to Supabase.
+
+> **How DCR works here:** Entra ID doesn't natively support RFC 7591 Dynamic Client Registration. The Worker provides a stub `/register` endpoint that returns the pre-configured Entra `client_id` for every registration request. All clients share the same Entra public client app — which is safe because the PKCE flow never requires a client secret.
+
+> **Why proxy the OAuth endpoints?** The MCP SDK sends a `resource` parameter (RFC 8707) matching the server's origin URL (`https://mcp.yourdomain.com`). Entra ID rejects this with `AADSTS9010010` because the resource doesn't match the scope audience (`api://client-id`). The Worker's `/oauth/authorize` and `/oauth/token` endpoints strip the `resource` parameter before forwarding to Entra, resolving the conflict transparently.
 
 ## What You Need
 
@@ -91,6 +103,8 @@ CLOUDFLARE
    - `http://127.0.0.1/callback`
    - `https://vscode.dev/redirect`
 3. Click **Save**
+
+> **Claude Code and Open Code** use dynamic localhost ports for their OAuth callback (e.g., `http://localhost:3000/callback`, `http://localhost:54321/callback`). Registering `http://localhost` covers all ports when **Allow public client flows** is enabled (next step).
 
 ### Enable Public Client Flows
 
@@ -262,9 +276,30 @@ When you start the server, VS Code will:
 
 ### Claude Code
 
+Claude Code supports Dynamic Client Registration — it will call `POST /register` automatically and receive the Entra client_id without any manual configuration needed.
+
 ```bash
 claude mcp add --transport http cerebro-readonly https://mcp.yourdomain.com/
 ```
+
+Claude Code will register itself, open a browser for Entra ID login, and connect automatically.
+
+### Open Code
+
+Open Code also supports Dynamic Client Registration. Add the server via its MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "cerebro-readonly": {
+      "type": "http",
+      "url": "https://mcp.yourdomain.com/"
+    }
+  }
+}
+```
+
+Open Code will register itself and prompt for Entra ID login automatically.
 
 ### Other Clients (Manual Token)
 
@@ -285,16 +320,32 @@ Then pass as `Authorization: Bearer <token>` header. Tokens expire after ~1 hour
 
 - [ ] **Health endpoint** — `https://mcp.yourdomain.com/health` returns `{"status":"ok","service":"cerebro-mcp-readonly","auth":"entra-id"}`
 - [ ] **Protected Resource Metadata** — `/.well-known/oauth-protected-resource` returns JSON pointing to Entra ID
-- [ ] **Auth Server Metadata** — `/.well-known/oauth-authorization-server` returns Entra ID endpoints
+- [ ] **Auth Server Metadata** — `/.well-known/oauth-authorization-server` returns Entra ID endpoints with `registration_endpoint`
+- [ ] **DCR endpoint** — `POST /register` returns 201 with `client_id` equal to your Entra client ID
 - [ ] **401 without token** — POST without auth returns 401 with `WWW-Authenticate: Bearer resource_metadata="..."`
 - [ ] **VS Code OAuth flow** — starting the server triggers Entra ID login prompt
+- [ ] **Claude Code OAuth flow** — `claude mcp add` registers and authenticates automatically
 - [ ] **Search works** — after auth, searching returns results from your brain
 - [ ] **Read-only** — only 3 tools available (search, list, stats)
 - [ ] **(Optional) User restriction** — if `MCP_READONLY_ALLOWED_USERS` is set, unauthorized users get 403
 
+```bash
+# Test DCR endpoint
+curl -s -X POST https://mcp.yourdomain.com/register \
+  -H "Content-Type: application/json" \
+  -d '{"redirect_uris":["http://localhost/callback"],"grant_types":["authorization_code"]}' \
+  | jq .
+
+# Expected: { "client_id": "YOUR_ENTRA_CLIENT_ID", "client_id_issued_at": ..., ... }
+```
+
 ---
 
 ## Troubleshooting
+
+### AADSTS9010010: Resource parameter mismatch
+
+The MCP SDK sends `resource=https://mcp.yourdomain.com` (RFC 8707) to the authorization and token endpoints. Entra ID rejects this when it doesn't match the scope audience (`api://client-id`). The Worker's `/oauth/authorize` and `/oauth/token` proxy endpoints strip the `resource` parameter before forwarding to Entra. If you see this error, ensure your `wrangler.toml` has the correct `ENTRA_TENANT_ID` and the Worker is deployed with the latest code.
 
 ### AADSTS65002: Consent error
 

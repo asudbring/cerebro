@@ -1,9 +1,13 @@
 // Cloudflare Worker — OAuth discovery proxy for Cerebro MCP servers
 //
-// Serves OAuth discovery documents at the domain root so MCP clients (VS Code)
-// can find Entra ID as the authorization server. Routes requests by path:
-//   /rw/*  → primary cerebro-mcp Edge Function (read-write, 7 tools)
-//   /*     → cerebro-mcp-readonly Edge Function (read-only, 3 tools)
+// Serves OAuth discovery documents at the domain root so MCP clients (VS Code,
+// Claude Code, Open Code, etc.) can find Entra ID as the authorization server.
+// Also implements RFC 7591 Dynamic Client Registration (DCR) stub so clients
+// that require DCR (Claude Code, Open Code) can register without user friction.
+// Routes requests by path:
+//   /rw/*     → primary cerebro-mcp Edge Function (read-write, 7 tools)
+//   /*        → cerebro-mcp-readonly Edge Function (read-only, 3 tools)
+//   /register → DCR stub (serves pre-configured Entra client_id to all clients)
 
 interface Env {
   SUPABASE_FUNCTION_URL: string;         // read-only Edge Function URL
@@ -22,9 +26,7 @@ export default {
     if (path === "/.well-known/oauth-protected-resource") {
       return Response.json({
         resource: origin,
-        authorization_servers: [
-          `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/v2.0`,
-        ],
+        authorization_servers: [origin],
         scopes_supported: [
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.Read`,
           `api://${env.ENTRA_CLIENT_ID}/Thoughts.ReadWrite`,
@@ -37,12 +39,12 @@ export default {
 
     // --- OAuth Authorization Server Metadata (RFC 8414) ---
     if (path === "/.well-known/oauth-authorization-server") {
-      const entraBase = `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/v2.0`;
       return Response.json({
-        issuer: entraBase,
-        authorization_endpoint: `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/oauth2/v2.0/authorize`,
-        token_endpoint: `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/oauth2/v2.0/token`,
+        issuer: origin,
+        authorization_endpoint: `${origin}/oauth/authorize`,
+        token_endpoint: `${origin}/oauth/token`,
         jwks_uri: `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/discovery/v2.0/keys`,
+        registration_endpoint: `${origin}/register`,
         response_types_supported: ["code"],
         grant_types_supported: ["authorization_code"],
         code_challenge_methods_supported: ["S256"],
@@ -56,6 +58,38 @@ export default {
       });
     }
 
+    // --- Dynamic Client Registration (RFC 7591) ---
+    // Claude Code, Open Code, and other MCP clients call POST /register before
+    // initiating the OAuth flow. Since Entra ID doesn't support DCR natively,
+    // we return the pre-configured Entra public client_id for every request.
+    // All clients share the same Entra app (PKCE, no client secret needed).
+    if (path === "/register" && request.method === "POST") {
+      let body: Record<string, unknown> = {};
+      try {
+        const text = await request.text();
+        if (text) body = JSON.parse(text);
+      } catch { /* empty or non-JSON body is acceptable */ }
+
+      const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+      // Echo back grant_types from the request; default to authorization_code only
+      const grantTypes = Array.isArray(body.grant_types) && body.grant_types.length
+        ? body.grant_types
+        : ["authorization_code"];
+
+      return Response.json({
+        client_id: env.ENTRA_CLIENT_ID,
+        client_id_issued_at: Math.floor(Date.now() / 1000),
+        token_endpoint_auth_method: "none",
+        grant_types: grantTypes,
+        response_types: ["code"],
+        redirect_uris: redirectUris,
+        code_challenge_methods_supported: ["S256"],
+      }, {
+        status: 201,
+        headers: corsHeaders(request),
+      });
+    }
+
     // --- OpenID Connect Discovery (fallback) ---
     if (path === "/.well-known/openid-configuration") {
       const entraUrl = `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/v2.0/.well-known/openid-configuration`;
@@ -63,6 +97,39 @@ export default {
       return new Response(resp.body, {
         status: resp.status,
         headers: corsHeaders(request),
+      });
+    }
+
+    // --- OAuth Authorization Proxy ---
+    // Strips the `resource` parameter before redirecting to Entra.
+    // The MCP SDK sends resource=<origin> (required by RFC 9728 matching), but
+    // Entra v2.0 rejects it unless it matches the scope audience (api://client-id).
+    // Solution: proxy through here and drop the resource param.
+    if (path === "/oauth/authorize") {
+      const entraUrl = new URL(
+        `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/oauth2/v2.0/authorize`
+      );
+      for (const [key, value] of url.searchParams) {
+        if (key !== "resource") entraUrl.searchParams.set(key, value);
+      }
+      return Response.redirect(entraUrl.toString(), 302);
+    }
+
+    // --- OAuth Token Proxy ---
+    // Same resource-stripping logic for the token endpoint.
+    if (path === "/oauth/token" && request.method === "POST") {
+      const body = await request.text();
+      const params = new URLSearchParams(body);
+      params.delete("resource");
+      const entraTokenUrl = `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/oauth2/v2.0/token`;
+      const resp = await fetch(entraTokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+      return new Response(resp.body, {
+        status: resp.status,
+        headers: { ...Object.fromEntries(resp.headers), ...corsHeaders(request) },
       });
     }
 

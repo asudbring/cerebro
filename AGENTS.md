@@ -42,6 +42,7 @@ Cerebro is a cloud-based personal knowledge store. It pairs a Supabase PostgreSQ
 Read-Only MCP path (OAuth):
   MCP Client → Cloudflare Worker (mcp.yourdomain.com)
     → OAuth discovery (/.well-known/*) served locally
+    → Dynamic Client Registration stub (POST /register, RFC 7591) for Claude Code / Open Code
     → MCP requests proxied to Supabase Edge Function
     → Token validation via Entra ID JWKS
 ```
@@ -70,7 +71,7 @@ cerebro/
 ├── integrations/
 │   ├── mcp-server/              # Core MCP server (7 tools, dual auth: OAuth + x-brain-key header)
 │   ├── mcp-server-readonly/     # Read-only MCP server (3 tools, OAuth via Entra ID)
-│   ├── cloudflare-worker/       # OAuth proxy (mcp.yourdomain.com) — CORS allowlist, path traversal protection
+│   ├── cloudflare-worker/       # OAuth proxy (mcp.yourdomain.com) — DCR stub, OAuth authorize/token proxy (strips resource param for Entra), CORS allowlist, path traversal protection
 │   ├── teams-capture/           # Microsoft Teams bot (Bot Framework)
 │   ├── discord-capture/         # Discord bot (slash commands)
 │   ├── alexa-capture/           # Alexa voice skill (HTTPS endpoint)

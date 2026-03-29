@@ -3,11 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
 [vars]
-SUPABASE_FUNCTION_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp-readonly"
-SUPABASE_RW_FUNCTION_URL = "https://YOUR_PROJECT_REF.supabase.co/functions/v1/cerebro-mcp"
-ENTRA_TENANT_ID = "YOUR_ENTRA_TENANT_ID"
-ENTRA_CLIENT_ID = "YOUR_ENTRA_CLIENT_ID"
+SUPABASE_FUNCTION_URL = "https://livdhnxdbnhxxxlgcoge.supabase.co/functions/v1/cerebro-mcp-readonly"
+SUPABASE_RW_FUNCTION_URL = "https://livdhnxdbnhxxxlgcoge.supabase.co/functions/v1/cerebro-mcp"
+ENTRA_TENANT_ID = "1e1cce84-0637-4693-99d9-27ff18dd65c8"
+ENTRA_CLIENT_ID = "355a0427-cc2c-4de2-a924-d17353b5241d"
 
 [[routes]]
-pattern = "mcp.yourdomain.com/*"
-zone_name = "yourdomain.com"
+pattern = "mcp.sudbringlab.cloud/*"
+zone_name = "sudbringlab.cloud"
