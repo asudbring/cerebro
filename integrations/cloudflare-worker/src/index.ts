@@ -137,11 +137,14 @@ export default {
     }
 
     // --- OAuth Token Proxy ---
-    // Same resource-stripping logic for the token endpoint.
+    // Rewrites the `resource` parameter to use the GUID-based app identifier.
+    // The MCP SDK sends resource=<origin> which Entra rejects (AADSTS9010010).
+    // When client_id == resource app (DCR clients), Entra requires the GUID format
+    // (AADSTS90009). Setting resource to the bare client_id GUID satisfies both.
     if (path === "/oauth/token" && request.method === "POST") {
       const body = await request.text();
       const params = new URLSearchParams(body);
-      params.delete("resource");
+      params.set("resource", env.ENTRA_CLIENT_ID);
       const entraTokenUrl = `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/oauth2/v2.0/token`;
       const resp = await fetch(entraTokenUrl, {
         method: "POST",
