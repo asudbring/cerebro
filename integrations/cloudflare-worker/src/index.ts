@@ -122,29 +122,35 @@ export default {
     }
 
     // --- OAuth Authorization Proxy ---
-    // Strips the `resource` parameter before redirecting to Entra.
-    // The MCP SDK sends resource=<origin> (required by RFC 9728 matching), but
-    // Entra v2.0 rejects it unless it matches the scope audience (api://client-id).
-    // Solution: proxy through here and drop the resource param.
+    // Strips `resource` and rewrites `scope` before redirecting to Entra.
+    // 1. MCP SDK sends resource=<origin> — Entra rejects (AADSTS9010010)
+    // 2. DCR clients get client_id == resource app (self-token scenario).
+    //    Entra v2.0 infers resource from scope; api:// URI format triggers
+    //    AADSTS90009 ("use GUID based App Identifier"). Fix: rewrite scope
+    //    from api://CLIENT_ID/... to CLIENT_ID/... (bare GUID format).
     if (path === "/oauth/authorize") {
       const entraUrl = new URL(
         `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/oauth2/v2.0/authorize`
       );
       for (const [key, value] of url.searchParams) {
-        if (key !== "resource") entraUrl.searchParams.set(key, value);
+        if (key === "resource") continue;
+        if (key === "scope") {
+          entraUrl.searchParams.set(key, value.replace(/api:\/\//g, ""));
+        } else {
+          entraUrl.searchParams.set(key, value);
+        }
       }
       return Response.redirect(entraUrl.toString(), 302);
     }
 
     // --- OAuth Token Proxy ---
-    // Rewrites the `resource` parameter to use the GUID-based app identifier.
-    // The MCP SDK sends resource=<origin> which Entra rejects (AADSTS9010010).
-    // When client_id == resource app (DCR clients), Entra requires the GUID format
-    // (AADSTS90009). Setting resource to the bare client_id GUID satisfies both.
+    // Same resource/scope rewriting for the token endpoint.
     if (path === "/oauth/token" && request.method === "POST") {
       const body = await request.text();
       const params = new URLSearchParams(body);
-      params.set("resource", env.ENTRA_CLIENT_ID);
+      params.delete("resource");
+      const scope = params.get("scope");
+      if (scope) params.set("scope", scope.replace(/api:\/\//g, ""));
       const entraTokenUrl = `https://login.microsoftonline.com/${env.ENTRA_TENANT_ID}/oauth2/v2.0/token`;
       const resp = await fetch(entraTokenUrl, {
         method: "POST",

@@ -73,7 +73,7 @@ MCP Clients → Cloudflare Worker (mcp.yourdomain.com) → Edge Functions
 
 - **Primary MCP:** 12 tools (7 core + 5 publishing), dual auth (OAuth Bearer + `x-brain-key` header)
 - **Read-Only MCP:** 3 tools, OAuth only (Entra ID JWKS validation)
-- **Cloudflare Worker:** Serves RFC 9728 metadata, strips `resource` param from Entra token requests, path-specific protected resource metadata for VS Code compatibility
+- **Cloudflare Worker:** Serves RFC 9728 metadata, strips `resource` param and rewrites `scope` from `api://` to GUID format for Entra compatibility, path-specific protected resource metadata for VS Code compatibility
 
 ## Repo Layout
 

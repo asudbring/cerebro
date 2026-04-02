@@ -55,7 +55,7 @@ OpenRouter (embeddings for search only)
 
 > **How DCR works here:** Entra ID doesn't natively support RFC 7591 Dynamic Client Registration. The Worker provides a stub `/register` endpoint that returns the pre-configured Entra `client_id` for every registration request. All clients share the same Entra public client app — which is safe because the PKCE flow never requires a client secret.
 
-> **Why proxy the OAuth endpoints?** The MCP SDK sends a `resource` parameter (RFC 8707) matching the server's origin URL (`https://mcp.yourdomain.com`). Entra ID rejects this with `AADSTS9010010` because the resource doesn't match the scope audience (`api://client-id`). The Worker's `/oauth/authorize` and `/oauth/token` endpoints strip the `resource` parameter before forwarding to Entra, resolving the conflict transparently.
+> **Why proxy the OAuth endpoints?** The MCP SDK sends a `resource` parameter (RFC 8707) matching the server's origin URL. Entra rejects this with `AADSTS9010010`. Additionally, DCR clients share the same `client_id` as the resource app (self-token scenario) — Entra requires the GUID format for self-tokens (`AADSTS90009`). The Worker's `/oauth/authorize` and `/oauth/token` endpoints strip `resource` and rewrite `scope` from `api://CLIENT_ID/...` to `CLIENT_ID/...` (bare GUID format) before forwarding to Entra, resolving both conflicts transparently.
 
 > **Path-specific resource metadata (RFC 9728):** VS Code's MCP SDK enforces an exact match between the `resource` field and the URL being connected to. A client connecting to `/rw/` fetches `/.well-known/oauth-protected-resource/rw/` and expects `resource: "https://mcp.yourdomain.com/rw/"`. The Worker derives the resource URL from the path suffix, so each sub-path gets the correct metadata automatically.
 
@@ -417,6 +417,10 @@ If you're prompted to log in every time you open a client, the access token expi
 ### AADSTS9010010: Resource parameter mismatch
 
 The MCP SDK sends `resource=https://mcp.yourdomain.com` (RFC 8707) to the authorization and token endpoints. Entra ID rejects this when it doesn't match the scope audience (`api://client-id`). The Worker's `/oauth/authorize` and `/oauth/token` proxy endpoints strip the `resource` parameter before forwarding to Entra. If you see this error, ensure your `wrangler.toml` has the correct `ENTRA_TENANT_ID` and the Worker is deployed with the latest code.
+
+### AADSTS90009: Self-token requires GUID-based identifier
+
+DCR clients (Claude Code, Open Code) share the same `client_id` as the resource app — Entra calls this a "self-token" scenario. On the v2.0 endpoint, Entra infers the resource from `scope`. If the scope uses the `api://` URI format (e.g., `api://CLIENT_ID/Thoughts.ReadWrite`), Entra rejects it. The Worker rewrites scope to strip the `api://` prefix (→ `CLIENT_ID/Thoughts.ReadWrite`), using the GUID format Entra requires for self-tokens.
 
 ### AADSTS65002: Consent error
 
