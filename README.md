@@ -47,7 +47,7 @@ The setup guide covers:
 ### What Gets Built
 
 - **PostgreSQL + pgvector** database with semantic search
-- **MCP server** (Supabase Edge Function) with 7 tools:
+- **MCP server** (Supabase Edge Function) with 12 tools:
   - `search_thoughts` — Semantic similarity search
   - `list_thoughts` — Browse recent with filters
   - `thought_stats` — Summary statistics
@@ -55,6 +55,11 @@ The setup guide covers:
   - `complete_task` — Mark a task as done by semantic match
   - `reopen_task` — Reopen a completed task
   - `delete_task` — Soft-delete a thought
+  - `search_series_bible` — Search fiction series bibles (characters, worldbuilding, timeline, plot arcs)
+  - `search_style_guide` — Search author style guides (voice, word lists, formatting)
+  - `search_editorial_history` — Search past editorial findings across pipeline runs
+  - `search_cover_specs` — Search book cover design specifications
+  - `capture_publishing` — Write content into any publishing collection
 - **Supabase Storage** — File attachments with signed URLs (1 GB free)
 - **Access key auth** — Simple, secure, no OAuth complexity
 
@@ -116,7 +121,8 @@ by describing them — Cerebro uses AI to match the right one.
 docs/           — Setup guides and documentation
 extensions/     — Feature extensions (coming soon)
 integrations/   — MCP server, Teams capture, Discord capture, Alexa voice, iMessage capture, daily digest
-schemas/        — Database schemas and migrations
+schemas/        — Database schemas and migrations (including publishing collections)
+scripts/        — Database client (dbsql.py) and publishing ingest CLI (cerebro_ingest.py)
 ```
 
 ## Connecting Your AI
@@ -129,6 +135,17 @@ Works with any MCP-compatible client:
 | ChatGPT | Settings → Apps & Connectors → Create → paste URL |
 | Claude Code | `claude mcp add --transport http cerebro <url> --header "x-brain-key: <key>"` |
 | Cursor/VS Code | Remote MCP URL or `mcp-remote` bridge |
+
+### Publishing Collections
+
+Cerebro includes four specialized collections for AI-powered fiction editing pipelines:
+
+- **Series Bible** — Characters, worldbuilding, timeline, settings, plot arcs for fiction series
+- **Style Guide** — Author voice, word preferences, formatting rules, genre conventions
+- **Editorial History** — Findings from editing passes (voice, pacing, continuity, craft issues)
+- **Cover Specs** — Book cover design specifications (palettes, typography, imagery)
+
+Each collection uses the same pgvector semantic search as thoughts. The `capture_publishing` tool writes to any collection; dedicated search tools retrieve context during editing. A Python ingest CLI (`scripts/cerebro_ingest.py`) bulk-loads markdown files (series bibles, style guides) with automatic heading-based chunking and category detection.
 
 ## On-Prem Version
 

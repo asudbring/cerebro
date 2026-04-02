@@ -63,5 +63,19 @@ Run the migrations in order in the Supabase SQL Editor:
 3. **`003-digest-cron.sql`** — pg_cron + pg_net scheduled digest jobs
 4. **`004-add-file-columns.sql`** — File attachment columns (file_url, file_type)
 5. **`005-add-status-column.sql`** — Task status column and indexes
+6. **`010-publishing-collections.sql`** — Publishing tables (series bible, style guide, editorial history, cover specs) with HNSW indexes and match functions
 
 See the [Getting Started guide](../../docs/01-getting-started.md) for step-by-step instructions.
+
+## Publishing Collections (Migration 010)
+
+Four additional tables for AI-powered fiction editing pipelines:
+
+| Table | Purpose | Key Columns |
+| ----- | ------- | ----------- |
+| `cerebro_series_bible` | Characters, worldbuilding, timeline, settings, plot arcs | `series_name`, `category`, `entity_name` |
+| `cerebro_style_guide` | Author voice, word preferences, formatting rules | `author_name`, `section` |
+| `cerebro_editorial_history` | Findings from editing passes | `series_name`, `book_title`, `finding_type`, `severity` |
+| `cerebro_cover_specs` | Book cover design specifications | `series_name`, `book_title`, `spec_type` |
+
+Each table includes a `vector(1536)` embedding column with HNSW index, a `metadata` JSONB column, RLS policy (`service_role` only), and a corresponding `match_*` RPC function for semantic search.

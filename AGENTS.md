@@ -50,7 +50,7 @@ Read-Only MCP path (OAuth):
 ### Supabase Project
 
 - **Project ref:** `YOUR_PROJECT_REF` (set during Supabase project creation)
-- **7 Edge Functions:** cerebro-mcp, cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
+- **7 Edge Functions:** cerebro-mcp (12 tools), cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
 - **Auth:** `x-brain-key` header (primary MCP); OAuth 2.1 via Entra ID through Cloudflare Worker proxy (both servers). Primary server supports dual auth (OAuth + API key).
 - **All functions** use Deno + Hono framework, deployed via `npx supabase functions deploy <name> --no-verify-jwt`
 
@@ -69,7 +69,7 @@ cerebro/
 ├── docs/                        # Setup guides (01 through 11)
 ├── extensions/                  # Feature extensions (future)
 ├── integrations/
-│   ├── mcp-server/              # Core MCP server (7 tools, dual auth: OAuth + x-brain-key header)
+│   ├── mcp-server/              # Core MCP server (12 tools: 7 core + 5 publishing, dual auth: OAuth + x-brain-key header)
 │   ├── mcp-server-readonly/     # Read-only MCP server (3 tools, OAuth via Entra ID)
 │   ├── cloudflare-worker/       # OAuth proxy (mcp.yourdomain.com) — DCR stub, path-specific RFC 9728 metadata, OAuth authorize/token proxy (strips resource param for Entra), CORS allowlist, path traversal protection
 │   ├── teams-capture/           # Microsoft Teams bot (Bot Framework)
@@ -78,9 +78,10 @@ cerebro/
 │   ├── imessage-capture/        # iMessage via BlueBubbles webhooks
 │   └── daily-digest/            # Daily/weekly digest generator + delivery
 ├── schemas/
-│   └── core/                    # SQL migrations (schema.sql, 002–009)
+│   └── core/                    # SQL migrations (schema.sql, 002–010)
 ├── scripts/
-│   └── dbsql.py                 # Pure-Python PostgreSQL client
+│   ├── dbsql.py                 # Pure-Python PostgreSQL client
+│   └── cerebro_ingest.py        # Publishing ingest CLI (series-bible, style-guide, editorial, cover-spec)
 ├── supabase/                    # Deployment copies (gitignored internals)
 ├── .env                         # Database credentials (gitignored)
 ├── CLAUDE.md                    # Agent instructions (legacy, kept for compat)
@@ -166,6 +167,21 @@ The `thoughts` table is the core data store:
 
 **Key RPC function:** `match_thoughts(query_embedding, match_threshold, match_count)` — vector similarity search.
 
+**Publishing RPC functions:** `match_series_bible`, `match_style_guide`, `match_editorial_history`, `match_cover_specs` — same signature, each searches its respective publishing collection.
+
+### Publishing Tables
+
+Four tables for AI-powered fiction editing pipelines (migration `010-publishing-collections.sql`):
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `cerebro_series_bible` | Characters, worldbuilding, timeline, settings, plot arcs | `series_name`, `category`, `entity_name` |
+| `cerebro_style_guide` | Author voice, word preferences, formatting rules | `author_name`, `section` |
+| `cerebro_editorial_history` | Findings from editing passes | `series_name`, `book_title`, `finding_type`, `severity` |
+| `cerebro_cover_specs` | Book cover design specifications | `series_name`, `book_title`, `spec_type` |
+
+All publishing tables follow the same pattern: `vector(1536)` embedding column with HNSW index, `metadata` JSONB column, RLS policy (`service_role` only), and `updated_at` trigger. Series/book isolation is column-based — no data overwrites between series or books.
+
 ### Migration Conventions
 
 - Files in `schemas/core/` named `NNN-description.sql` (e.g., `007-source-message-id.sql`)
@@ -193,8 +209,9 @@ Deno.serve(app.fetch);
 ### Deployment
 
 ```bash
-# 1. Copy source to deploy directory
+# 1. Copy source to deploy directory (both index.ts AND deno.json required)
 cp integrations/<name>/index.ts supabase/functions/<name>/index.ts
+cp integrations/<name>/deno.json supabase/functions/<name>/deno.json
 
 # 2. Deploy
 npx supabase functions deploy <name> --no-verify-jwt
@@ -275,7 +292,7 @@ Must use `app.post("*")` not `app.post("/")` — Supabase strips paths during ro
 
 ### Supabase Deploy Directory
 
-Files in `supabase/functions/<name>/` must be actual copies, not symlinks. The Supabase container doesn't follow symlinks.
+Files in `supabase/functions/<name>/` must be actual copies, not symlinks. Both `index.ts` and `deno.json` must be copied. The Supabase container doesn't follow symlinks, and a missing `deno.json` causes "Relative import path not prefixed" errors.
 
 ## Environment Variables (Supabase Secrets)
 
@@ -314,6 +331,27 @@ These are set via `npx supabase secrets set` and available in Edge Functions:
 - **Error handling:** Try/catch with user-facing error replies, console.error for logging
 - **No local dependencies** — all imports from JSR or npm specifiers in Deno
 - **Comments:** Only where behavior is non-obvious; no boilerplate comments
+- **Zod schemas (MCP tools):** Only use `z.string()`, `z.number()`, `z.boolean()` with `.optional()` / `.default()` / `.describe()`. Do NOT use `z.enum()`, `z.record()`, `z.unknown()`, or `z.union()` — these cause `_zod` errors with the MCP SDK + Zod 4 combo. Use `z.string()` with validation in the handler instead.
+
+## Publishing Ingest CLI
+
+`scripts/cerebro_ingest.py` bulk-loads markdown files into publishing collections via Supabase PostgREST.
+
+```bash
+# Ingest a series bible
+python3 scripts/cerebro_ingest.py series-bible \
+  --file /path/to/world-bible.md --series "The Remnant Divide"
+
+# Replace all chunks for a series (purge + re-ingest)
+python3 scripts/cerebro_ingest.py series-bible \
+  --file /path/to/world-bible.md --series "The Remnant Divide" --replace
+
+# Ingest a style guide
+python3 scripts/cerebro_ingest.py style-guide \
+  --file /path/to/style-guide.md --author "Anika Thorne"
+```
+
+Requires `.env` in the cerebro project root with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `OPENROUTER_API_KEY`. Chunks are split by markdown headings with automatic category detection (character, worldbuilding, timeline, setting, plot_arc, general).
 
 ## Related Projects
 

@@ -1,78 +1,106 @@
-# CLAUDE.md — Agent Instructions for Cerebro
+# CLAUDE.md
 
-This file tells AI coding tools (Claude Code, Codex, Cursor, etc.) how to navigate and contribute to this repo safely.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **See also:** `AGENTS.md` for comprehensive agent instructions including architecture details, infrastructure, known issues, and integration-specific notes. **When making changes to the project, update both CLAUDE.md, AGENTS.md, and any relevant docs/ files to keep documentation in sync.**
+> **See also:** `AGENTS.md` for detailed architecture, infrastructure specifics, environment variables, known issues, and integration-specific notes. **When making changes, update both CLAUDE.md, AGENTS.md, and any relevant docs/ files to keep documentation in sync.**
 
 ## What This Repo Is
 
-Cerebro is a personal knowledge store that lives in the cloud. It pairs a Supabase PostgreSQL database (with pgvector for embeddings) with an MCP server so that any compatible AI client can capture, search, and manage your thoughts. Multiple input channels — Discord, Teams, Alexa, iMessage, and direct MCP calls — all write to the same underlying data.
-
-Inspired by the [Open Brain](https://github.com/NateBJones/OB1) project by Nate B. Jones.
+Cerebro is a cloud-based personal knowledge store. Supabase (PostgreSQL + pgvector) stores thoughts with 1536-dim embeddings. An MCP server exposes 12 tools — 7 core (`search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`) and 5 publishing (`search_series_bible`, `search_style_guide`, `search_editorial_history`, `search_cover_specs`, `capture_publishing`). Multiple capture channels (Discord, Teams, Alexa, iMessage) all write to the same `thoughts` table. Four publishing collections (`cerebro_series_bible`, `cerebro_style_guide`, `cerebro_editorial_history`, `cerebro_cover_specs`) support AI-powered fiction editing pipelines.
 
 **License:** FSL-1.1-MIT. No commercial derivative works for the first 2 years.
 
-## Repo Structure
+## Common Commands
 
-```text
-docs/           — Setup guides and documentation
-extensions/     — Feature extensions that build on the core system
-integrations/   — MCP server, capture sources, webhook receivers
-schemas/        — Database schemas (core thoughts table + extensions)
-.github/        — CI workflows and configs
+### Deploying Edge Functions
+
+```bash
+# Copy source then deploy (containers don't follow symlinks)
+cp integrations/<name>/index.ts supabase/functions/<name>/index.ts
+cp integrations/<name>/deno.json supabase/functions/<name>/deno.json
+npx supabase functions deploy <name> --no-verify-jwt
+
+# Set secrets when adding new env vars
+npx supabase secrets set KEY=VALUE
 ```
 
-## Core Architecture
+### Database Queries & Migrations
 
-- **Database:** Supabase (PostgreSQL + pgvector) — `thoughts` table with 1536-dim embeddings
-- **AI Gateway:** OpenRouter — embeddings via `text-embedding-3-small`, metadata extraction via `gpt-4o-mini`, PDF/document analysis via `gemini-2.0-flash`, image vision via `gpt-4o-mini`
-- **MCP Server (Primary):** Supabase Edge Function (Deno + Hono) with 7 tools: `search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`. Supports dual auth: OAuth Bearer tokens (via Entra ID JWKS) and `x-brain-key` header.
-- **MCP Server (Read-Only):** Separate Edge Function with 3 read-only tools (`search_thoughts`, `list_thoughts`, `thought_stats`), authenticated via OAuth 2.1 with Entra ID. Accessed through Cloudflare Worker proxy at `mcp.yourdomain.com` which serves OAuth discovery docs at domain root.
-- **Cloudflare Worker (OAuth Proxy):** `mcp.yourdomain.com` — serves MCP OAuth discovery documents (RFC 9728 Protected Resource Metadata) and proxies MCP requests to Supabase Edge Functions. Implements RFC 7591 Dynamic Client Registration stub at `POST /register` (returns pre-configured Entra client_id, enabling Claude Code and Open Code to auto-register). Proxies `GET /oauth/authorize` and `POST /oauth/token` to Entra, stripping the `resource` parameter (RFC 8707) which Entra rejects when it doesn't match the scope audience. Serves path-specific protected resource metadata (`/.well-known/oauth-protected-resource/rw/` returns `resource: origin/rw/`) so VS Code's strict RFC 9728 validation passes. Routes `/rw/*` to primary server, `/*` to read-only server. Includes CORS origin allowlist and path traversal protection.
-- **iMessage Capture:** BlueBubbles on Mac server + Cloudflare named tunnel → Supabase Edge Function
-- **Auth:** OAuth 2.1 via Entra ID (both servers) + `x-brain-key` header fallback (primary server only)
+```bash
+# psql does NOT work — use Supabase CLI or dbsql.py
+
+# Query via Supabase CLI (preferred, no .env needed)
+npx supabase db query "SELECT count(*) FROM thoughts" --linked
+
+# Run a migration file
+npx supabase db query --linked < schemas/core/NNN-name.sql
+
+# Alternative: Pure-Python client (reads .env)
+python3 scripts/dbsql.py "SELECT count(*) FROM thoughts"
+python3 scripts/dbsql.py -f schemas/core/NNN-name.sql
+```
+
+### Linting
+
+```bash
+# Markdown lint (runs in CI on push to main and PRs)
+npx markdownlint-cli2 "**/*.md"
+```
+
+Markdownlint config is at `.github/.markdownlint.jsonc`. Disabled rules: MD013 (line length), MD033 (inline HTML), MD041 (first line heading), MD060.
+
+### Cloudflare Worker
+
+```bash
+cd integrations/cloudflare-worker
+npx wrangler deploy
+```
+
+## Architecture
+
+```text
+Discord / Teams / Alexa / iMessage → Supabase Edge Functions (Deno + Hono)
+                                          ↓
+                                    PostgreSQL + pgvector (thoughts table)
+                                          ↓
+                                    OpenRouter AI Gateway
+                                    (embeddings, metadata extraction, vision)
+
+MCP Clients → Cloudflare Worker (mcp.yourdomain.com) → Edge Functions
+              (OAuth discovery, DCR stub, authorize/token proxy)
+              Routes: /rw/* → primary server, /* → read-only server
+```
+
+- **Primary MCP:** 12 tools (7 core + 5 publishing), dual auth (OAuth Bearer + `x-brain-key` header)
+- **Read-Only MCP:** 3 tools, OAuth only (Entra ID JWKS validation)
+- **Cloudflare Worker:** Serves RFC 9728 metadata, strips `resource` param from Entra token requests, path-specific protected resource metadata for VS Code compatibility
+
+## Repo Layout
+
+```text
+integrations/       — Edge Functions (mcp-server, mcp-server-readonly, cloudflare-worker,
+                      teams-capture, discord-capture, alexa-capture, imessage-capture, daily-digest)
+schemas/core/       — SQL migrations (schema.sql, 002–010), numbered sequentially
+docs/               — Setup guides (01–11)
+scripts/dbsql.py    — Pure-Python PostgreSQL client (bypasses libpq SCRAM issue)
+```
 
 ## Guard Rails
 
-- **Protect the `thoughts` table schema.** New columns are fine, but do not alter, rename, or drop existing ones — every integration depends on the current structure.
-- **Keep secrets out of source.** All credentials and API keys go into Supabase Secrets (environment variables), never into committed files.
+- **Protect the `thoughts` table schema.** Add columns freely, but never alter, rename, or drop existing ones.
+- **Destructive SQL is off-limits.** No `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, or unqualified `DELETE FROM`.
+- **Keep secrets out of source.** All credentials go into Supabase Secrets, never committed files.
+- **All server functions deploy as Supabase Edge Functions.** No local servers, stdio transports, or `claude_desktop_config.json` setups.
 - **No large binary files** (over 1 MB) in the repo.
-- **Destructive SQL is off-limits.** No `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, or unqualified `DELETE FROM` in any SQL file.
-- **All server functions deploy as Supabase Edge Functions.** Do not introduce local servers, stdio transports, or `claude_desktop_config.json`-based setups.
 
-## Key Files
+## Critical Patterns & Gotchas
 
-- `schemas/core/schema.sql` — Core database schema (thoughts table, vector search, RLS)
-- `schemas/core/002-digest-channels.sql` — Digest channels table migration
-- `schemas/core/003-digest-cron.sql` — pg_cron scheduling for daily/weekly digests
-- `schemas/core/004-add-file-columns.sql` — File attachment columns (file_url, file_type)
-- `integrations/mcp-server/index.ts` — Core MCP Edge Function
-- `integrations/teams-capture/index.ts` — Microsoft Teams capture bot (Bot Framework)
-- `integrations/discord-capture/index.ts` — Discord capture bot (slash commands)
-- `integrations/alexa-capture/index.ts` — Alexa voice skill (HTTPS endpoint)
-- `integrations/daily-digest/index.ts` — Daily/weekly digest generator + delivery
-- `docs/01-getting-started.md` — Full setup guide
-- `docs/02-teams-capture-setup.md` — Teams integration setup
-- `docs/03-discord-capture-setup.md` — Discord integration setup
-- `docs/04-alexa-setup.md` — Alexa voice setup
-- `docs/05-reminders-setup.md` — Calendar reminders setup (O365 + Google)
-- `docs/06-daily-digest-setup.md` — Daily digest setup (scheduling + delivery)
-- `docs/07-file-attachments-setup.md` — File attachment setup (vision + storage)
-- `schemas/core/005-add-status-column.sql` — Task status column and indexes
-- `docs/08-task-management-setup.md` — Task management setup guide
-- `docs/09-ai-guided-setup.md` — AI coding tool deployment workflow
-- `integrations/imessage-capture/index.ts` — iMessage capture via BlueBubbles (text commands, file attachments)
-- `integrations/mcp-server-readonly/index.ts` — Read-only MCP server with OAuth (Entra ID token validation)
-- `integrations/cloudflare-worker/src/index.ts` — Cloudflare Worker OAuth discovery proxy
-- `integrations/cloudflare-worker/wrangler.toml` — Worker deployment config
-- `schemas/core/006-imessage-digest.sql` — iMessage digest channel migration
-- `docs/10-imessage-setup.md` — iMessage/BlueBubbles setup guide
-- `docs/11-readonly-mcp-setup.md` — Read-only MCP server with OAuth setup guide
-- `schemas/core/007-source-message-id.sql` — Source message ID for deduplication
-- `schemas/core/008-review-fixes.sql` — RLS policy, unique constraint, file_type validation
-- `schemas/core/009-fix-cron-settings.sql` — Cron jobs with current_setting fallback
-- `scripts/dbsql.py` — Pure-Python PostgreSQL client (bypasses libpq SCRAM issue with Supabase)
-- `LICENSE.md` — FSL-1.1-MIT terms
+- **Edge Function routes must use `app.post("*")`** not `app.post("/")` — Supabase strips paths during routing and the wildcard is required.
+- **Deploy directory needs actual file copies**, not symlinks. Always `cp` both `index.ts` and `deno.json` to `supabase/functions/<name>/` before deploying.
+- **Migrations must be idempotent** — use `IF NOT EXISTS` / `IF EXISTS` in all SQL files. Name them `NNN-description.sql` sequentially.
+- **psql cannot connect** to this Supabase instance (libpq SCRAM-SHA-256 incompatibility with Supavisor). Always use the Supabase CLI or `scripts/dbsql.py`.
+- **All Edge Functions** follow the same pattern: Deno + Hono, imports from JSR/npm specifiers, `Deno.serve(app.fetch)`.
+- **iMessage loop prevention:** Bot replies use zero-width space prefix; stale messages (>5 min) are ignored; `source_message_id` deduplicates.
 
 ## Related Projects
 

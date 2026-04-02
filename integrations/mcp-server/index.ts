@@ -854,6 +854,250 @@ server.registerTool(
   },
 );
 
+// ============================================================
+// Publishing Collection Tools (8–12)
+// ============================================================
+
+// Tool 8: Search Series Bible
+server.registerTool(
+  "search_series_bible",
+  {
+    title: "Search Series Bible",
+    description:
+      "Search the series bible for facts about characters, worldbuilding, timeline, settings, or plot arcs. Use this when editing or writing to check continuity or look up established facts about the series.",
+    inputSchema: {
+      query: z.string().describe("What to look up (e.g. 'What color are Mara\\'s eyes?', 'cascade drive physics')"),
+      series_name: z.string().optional().describe("Filter to a specific series name"),
+      category: z.string().optional().describe("Filter by category: character, worldbuilding, timeline, setting, plot_arc"),
+      limit: z.number().optional().default(5),
+      threshold: z.number().optional().default(0.6),
+    },
+  },
+  async ({ query, series_name, category, limit, threshold }) => {
+    try {
+      const qEmb = await getEmbedding(query);
+      const filter: Record<string, unknown> = {};
+      if (series_name) filter.series_name = series_name;
+      if (category) filter.category = category;
+
+      const { data, error } = await supabase.rpc("match_series_bible", {
+        query_embedding: qEmb,
+        match_threshold: threshold,
+        match_count: limit,
+        filter: Object.keys(filter).length ? filter : {},
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `Search error: ${error.message}` }], isError: true };
+      if (!data || data.length === 0) return { content: [{ type: "text" as const, text: "No matching entries found in the series bible." }] };
+
+      const results = data.map((r: Record<string, unknown>) =>
+        `[${String(r.category).toUpperCase()}${r.entity_name ? ` — ${r.entity_name}` : ""} | series: ${r.series_name} | similarity: ${Number(r.similarity).toFixed(3)}]\n${r.content}`
+      ).join("\n\n---\n\n");
+
+      return { content: [{ type: "text" as const, text: results }] };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  },
+);
+
+// Tool 9: Search Style Guide
+server.registerTool(
+  "search_style_guide",
+  {
+    title: "Search Style Guide",
+    description:
+      "Search the author's style guide for voice preferences, words to avoid, prose examples, genre conventions, and formatting rules. Use before rewriting or evaluating prose.",
+    inputSchema: {
+      query: z.string().describe("What to look up (e.g. 'words to avoid', 'how to write action scenes', 'heat level guidelines')"),
+      author_name: z.string().optional().describe("Filter to a specific author's style guide"),
+      section: z.string().optional().describe("Filter by section: voice, avoid_words, prefer_words, examples, anti_examples, formatting, genre_conventions"),
+      limit: z.number().optional().default(5),
+      threshold: z.number().optional().default(0.6),
+    },
+  },
+  async ({ query, author_name, section, limit, threshold }) => {
+    try {
+      const qEmb = await getEmbedding(query);
+      const filter: Record<string, unknown> = {};
+      if (author_name) filter.author_name = author_name;
+      if (section) filter.section = section;
+
+      const { data, error } = await supabase.rpc("match_style_guide", {
+        query_embedding: qEmb,
+        match_threshold: threshold,
+        match_count: limit,
+        filter: Object.keys(filter).length ? filter : {},
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `Search error: ${error.message}` }], isError: true };
+      if (!data || data.length === 0) return { content: [{ type: "text" as const, text: "No matching entries found in the style guide." }] };
+
+      const results = data.map((r: Record<string, unknown>) =>
+        `[${String(r.section).toUpperCase()} | author: ${r.author_name} | similarity: ${Number(r.similarity).toFixed(3)}]\n${r.content}`
+      ).join("\n\n---\n\n");
+
+      return { content: [{ type: "text" as const, text: results }] };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  },
+);
+
+// Tool 10: Search Editorial History
+server.registerTool(
+  "search_editorial_history",
+  {
+    title: "Search Editorial History",
+    description:
+      "Search findings from past editing pipeline runs. Use to check for recurring patterns, known issues, or how previous manuscripts were improved.",
+    inputSchema: {
+      query: z.string().describe("What to look for (e.g. 'over-explaining FTL mechanics', 'pacing issues in act 2')"),
+      series_name: z.string().optional().describe("Filter to a specific series"),
+      finding_type: z.string().optional().describe("Filter by type: voice, pacing, continuity, craft, prose, cliche, structure, pattern"),
+      limit: z.number().optional().default(5),
+      threshold: z.number().optional().default(0.6),
+    },
+  },
+  async ({ query, series_name, finding_type, limit, threshold }) => {
+    try {
+      const qEmb = await getEmbedding(query);
+      const filter: Record<string, unknown> = {};
+      if (series_name) filter.series_name = series_name;
+      if (finding_type) filter.finding_type = finding_type;
+
+      const { data, error } = await supabase.rpc("match_editorial_history", {
+        query_embedding: qEmb,
+        match_threshold: threshold,
+        match_count: limit,
+        filter: Object.keys(filter).length ? filter : {},
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `Search error: ${error.message}` }], isError: true };
+      if (!data || data.length === 0) return { content: [{ type: "text" as const, text: "No matching editorial history found." }] };
+
+      const results = data.map((r: Record<string, unknown>) =>
+        `[${String(r.finding_type).toUpperCase()} | ${r.severity ?? "info"} | ${r.book_title} (${r.phase})${r.chapter_ref ? ` ch: ${r.chapter_ref}` : ""} | similarity: ${Number(r.similarity).toFixed(3)}]\n${r.content}`
+      ).join("\n\n---\n\n");
+
+      return { content: [{ type: "text" as const, text: results }] };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  },
+);
+
+// Tool 11: Search Cover Specs
+server.registerTool(
+  "search_cover_specs",
+  {
+    title: "Search Cover Specs",
+    description:
+      "Search cover design specifications, templates, palettes, and font notes. Use when designing a new cover for consistency with existing series covers.",
+    inputSchema: {
+      query: z.string().describe("What to look up (e.g. 'series color palette', 'font choices for Cascade Effect')"),
+      series_name: z.string().optional().describe("Filter to a specific series"),
+      limit: z.number().optional().default(5),
+      threshold: z.number().optional().default(0.6),
+    },
+  },
+  async ({ query, series_name, limit, threshold }) => {
+    try {
+      const qEmb = await getEmbedding(query);
+      const filter: Record<string, unknown> = {};
+      if (series_name) filter.series_name = series_name;
+
+      const { data, error } = await supabase.rpc("match_cover_specs", {
+        query_embedding: qEmb,
+        match_threshold: threshold,
+        match_count: limit,
+        filter: Object.keys(filter).length ? filter : {},
+      });
+
+      if (error) return { content: [{ type: "text" as const, text: `Search error: ${error.message}` }], isError: true };
+      if (!data || data.length === 0) return { content: [{ type: "text" as const, text: "No matching cover specs found." }] };
+
+      const results = data.map((r: Record<string, unknown>) =>
+        `[${String(r.spec_type).toUpperCase()} | ${r.book_title} (${r.series_name}) | similarity: ${Number(r.similarity).toFixed(3)}]\n${r.content}`
+      ).join("\n\n---\n\n");
+
+      return { content: [{ type: "text" as const, text: results }] };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  },
+);
+
+// Tool 12: Capture Publishing Content
+server.registerTool(
+  "capture_publishing",
+  {
+    title: "Capture Publishing Content",
+    description:
+      "Store content into a publishing collection (series_bible, style_guide, editorial_history, cover_specs). Used by the editing pipeline to persist findings, and during initial setup to ingest series bibles and style guides.",
+    inputSchema: {
+      collection: z.string().describe("Which collection to write to: series_bible, style_guide, editorial_history, or cover_specs"),
+      content: z.string().describe("The content to store"),
+      metadata: z.string().optional().describe("JSON-encoded metadata object with fields like series_name, author_name, category, section, finding_type, severity, etc."),
+    },
+  },
+  async ({ collection, content, metadata }) => {
+    try {
+      const validCollections = ["series_bible", "style_guide", "editorial_history", "cover_specs"];
+      if (!validCollections.includes(collection)) {
+        return { content: [{ type: "text" as const, text: `Invalid collection "${collection}". Must be one of: ${validCollections.join(", ")}` }], isError: true };
+      }
+
+      const m: Record<string, unknown> = metadata ? JSON.parse(metadata) : {};
+      const embedding = await getEmbedding(content);
+      const tableMap: Record<string, string> = {
+        series_bible: "cerebro_series_bible",
+        style_guide: "cerebro_style_guide",
+        editorial_history: "cerebro_editorial_history",
+        cover_specs: "cerebro_cover_specs",
+      };
+      const table = tableMap[collection];
+
+      const row: Record<string, unknown> = { content, embedding, metadata: m };
+
+      // Promote common metadata fields to top-level columns
+      if (collection === "series_bible") {
+        if (m.series_name) row.series_name = m.series_name;
+        if (m.category) row.category = m.category;
+        if (m.entity_name) row.entity_name = m.entity_name;
+      } else if (collection === "style_guide") {
+        if (m.author_name) row.author_name = m.author_name;
+        if (m.section) row.section = m.section;
+      } else if (collection === "editorial_history") {
+        if (m.series_name) row.series_name = m.series_name;
+        if (m.book_title) row.book_title = m.book_title;
+        if (m.book_number) row.book_number = m.book_number;
+        if (m.pipeline_run_id) row.pipeline_run_id = m.pipeline_run_id;
+        if (m.phase) row.phase = m.phase;
+        if (m.finding_type) row.finding_type = m.finding_type;
+        if (m.severity) row.severity = m.severity;
+        if (m.chapter_ref) row.chapter_ref = m.chapter_ref;
+      } else if (collection === "cover_specs") {
+        if (m.series_name) row.series_name = m.series_name;
+        if (m.book_title) row.book_title = m.book_title;
+        if (m.spec_type) row.spec_type = m.spec_type;
+      }
+
+      const { error } = await supabase.from(table).insert(row);
+      if (error) return { content: [{ type: "text" as const, text: `Insert error: ${error.message}` }], isError: true };
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: `Captured to ${collection}: "${content.slice(0, 80)}${content.length > 80 ? "…" : ""}"`,
+        }],
+      };
+    } catch (err: unknown) {
+      return { content: [{ type: "text" as const, text: `Error: ${(err as Error).message}` }], isError: true };
+    }
+  },
+);
+
 // --- Hono App with Auth Check ---
 
 const app = new Hono();

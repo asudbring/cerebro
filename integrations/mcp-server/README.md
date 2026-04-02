@@ -4,12 +4,27 @@ The core Cerebro MCP server — a Supabase Edge Function that gives any MCP-comp
 
 ## Tools
 
+### Core Tools
+
 | Tool | Description |
 | ---- | ----------- |
 | `search_thoughts` | Semantic similarity search — finds thoughts by meaning, not keywords |
 | `list_thoughts` | Browse recent thoughts with optional filters (type, topic, person, days) |
 | `thought_stats` | Summary statistics — totals, types, top topics, people mentioned |
 | `capture_thought` | Save a new thought with auto-generated embedding and metadata |
+| `complete_task` | Mark a task as done by semantic match |
+| `reopen_task` | Reopen a completed task |
+| `delete_task` | Soft-delete a thought or task |
+
+### Publishing Tools
+
+| Tool | Description |
+| ---- | ----------- |
+| `search_series_bible` | Search fiction series bibles — characters, worldbuilding, timeline, settings, plot arcs |
+| `search_style_guide` | Search author style guides — voice, word lists, formatting, genre conventions |
+| `search_editorial_history` | Search past editorial findings across pipeline runs |
+| `search_cover_specs` | Search book cover design specifications |
+| `capture_publishing` | Write content into any publishing collection (series_bible, style_guide, editorial_history, cover_specs) |
 
 ## Features
 
