@@ -1,0 +1,20 @@
+{
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "context-mode": {
+      "source": {
+        "source": "github",
+        "repo": "mksglu/context-mode"
+      }
+    }
+  },
+  "autoUpdatesChannel": "latest",
+  "enabledPlugins": {
+    "context-mode@context-mode": true
+  }
+}
