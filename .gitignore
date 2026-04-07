@@ -1,7 +1,9 @@
 node_modules/
 .DS_Store
 .planning/
-supabase/
+supabase/.temp/
+supabase/.branches/
+supabase/config.toml
 .env
 .env.local
 *.log
