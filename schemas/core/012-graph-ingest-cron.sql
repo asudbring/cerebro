@@ -8,10 +8,18 @@
 -- This schedules a daily POST to the cerebro-graph-ingest Edge Function at
 -- 11:00 UTC (5 AM Central) — one hour before the daily digest at 12:00 UTC,
 -- so newly ingested Graph items are available for that day's digest.
+--
+-- NOTE: pg_cron's bgworker context does NOT resolve current_setting('app.settings.*')
+-- so the URL and service_role JWT are hardcoded, matching the pattern used by
+-- 003-digest-cron.sql. If you fork/redeploy, replace both values with your own.
 
 -- Enable extensions (Supabase Dashboard → Database → Extensions)
 create extension if not exists pg_cron with schema pg_catalog;
 create extension if not exists pg_net with schema extensions;
+
+-- Drop any prior scheduling so this migration is idempotent
+select cron.unschedule('cerebro-graph-ingest-daily')
+where exists (select 1 from cron.job where jobname = 'cerebro-graph-ingest-daily');
 
 -- Daily Graph ingest: every day at 11:00 UTC (5 AM Central)
 select cron.schedule(
@@ -19,13 +27,14 @@ select cron.schedule(
   '0 11 * * *',
   $$
   select net.http_post(
-    url := current_setting('app.settings.supabase_url') || '/functions/v1/cerebro-graph-ingest',
+    url := 'https://livdhnxdbnhxxxlgcoge.supabase.co/functions/v1/cerebro-graph-ingest',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')
+      'Authorization', 'Bearer <REDACTED_SUPABASE_JWT>'
     ),
     body := '{"source":"all"}'::jsonb,
     timeout_milliseconds := 300000
   ) as request_id;
   $$
 );
+
