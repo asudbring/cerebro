@@ -511,14 +511,39 @@ async function sendFollowup(
   content: string,
 ): Promise<void> {
   const url = `https://discord.com/api/v10/webhooks/${applicationId}/${interactionToken}`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
-  });
-  if (!r.ok) {
-    const msg = await r.text().catch(() => "");
-    console.error(`Discord followup failed: ${r.status} ${msg}`);
+  const MAX = 2000;
+  const chunks: string[] = [];
+  if (content.length <= MAX) {
+    chunks.push(content);
+  } else {
+    let remaining = content;
+    while (remaining.length > MAX) {
+      let cut = remaining.lastIndexOf("\n\n", MAX);
+      if (cut < MAX / 2) cut = remaining.lastIndexOf("\n", MAX);
+      if (cut < MAX / 2) cut = remaining.lastIndexOf(" ", MAX);
+      if (cut < MAX / 2) cut = MAX;
+      chunks.push(remaining.slice(0, cut));
+      remaining = remaining.slice(cut).replace(/^\s+/, "");
+    }
+    if (remaining) chunks.push(remaining);
+  }
+  console.log(`[followup] sending ${chunks.length} chunk(s) totalLen=${content.length}`);
+  for (let i = 0; i < chunks.length; i++) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: chunks[i] }),
+      });
+      if (!r.ok) {
+        const msg = await r.text().catch(() => "");
+        console.error(`[followup] chunk ${i + 1}/${chunks.length} FAILED status=${r.status} body=${msg}`);
+      } else {
+        console.log(`[followup] chunk ${i + 1}/${chunks.length} OK`);
+      }
+    } catch (e) {
+      console.error(`[followup] chunk ${i + 1} THREW: ${(e as Error).message}`);
+    }
   }
 }
 
@@ -840,15 +865,19 @@ app.post("*", async (c) => {
       const applicationId = interaction.application_id;
       const interactionToken = interaction.token;
 
+      console.log(`[search] received query="${query}" appId=${applicationId}`);
       const searchPromise = (async () => {
         try {
+          console.log(`[search] requesting embedding`);
           const qEmb = await getEmbedding(query);
+          console.log(`[search] embedding got len=${qEmb.length}`);
           const { data, error } = await supabase.rpc("match_thoughts", {
             query_embedding: qEmb,
             match_threshold: 0.5,
             match_count: 5,
             filter: {},
           });
+          console.log(`[search] rpc done error=${error?.message ?? "none"} rows=${data?.length ?? 0}`);
 
           if (error) {
             await sendFollowup(
@@ -901,7 +930,13 @@ app.post("*", async (c) => {
         }
       })();
 
-      EdgeRuntime.waitUntil(searchPromise);
+      try {
+        // @ts-ignore — EdgeRuntime is provided by Supabase runtime
+        EdgeRuntime.waitUntil(searchPromise);
+        console.log(`[search] waitUntil registered`);
+      } catch (e) {
+        console.error(`[search] waitUntil threw: ${(e as Error).message}`);
+      }
       return c.json({ type: 5 });
     }
 
