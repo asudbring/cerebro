@@ -64,6 +64,8 @@ Run the migrations in order in the Supabase SQL Editor:
 4. **`004-add-file-columns.sql`** — File attachment columns (file_url, file_type)
 5. **`005-add-status-column.sql`** — Task status column and indexes
 6. **`010-publishing-collections.sql`** — Publishing tables (series bible, style guide, editorial history, cover specs) with HNSW indexes and match functions
+7. **`011-graph-ingest.sql`** — `graph_ingest_state` table for Microsoft Graph daily ingest high-water marks (RLS service_role only, seeds rows for mail/event/onenote/file)
+8. **`012-graph-ingest-cron.sql`** — pg_cron schedule `cerebro-graph-ingest-daily` at `0 11 * * *` UTC (1 hour before daily digest)
 
 See the [Getting Started guide](../../docs/01-getting-started.md) for step-by-step instructions.
 

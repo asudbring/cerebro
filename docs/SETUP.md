@@ -506,6 +506,40 @@ Share **read-only** access to your brain via a second MCP server protected by **
 
 ---
 
+## Phase 8: Microsoft Graph Daily Ingest (OPTIONAL)
+
+Auto-pulls Outlook mail, calendar, OneNote, and OneDrive/SharePoint items into the `thoughts` table on a daily schedule. An AI gatekeeper decides save/skip per item; only items "worth keeping" become thoughts. Saved items appear in the next morning's digest under 📧 Important Emails / 📅 Calendar / 📝 OneNote / 📄 Documents.
+
+### Phase 8 Prerequisites
+
+| Prerequisite | Why |
+|-------------|-----|
+| Phase 1 complete | Database, MCP, OpenRouter |
+| Phase 3 complete (Entra app for calendar reminders) | Reuses the same app registration and `GRAPH_*` secrets |
+| Tenant admin | Must grant admin consent for new application permissions |
+
+### Phase 8 Steps
+
+1. Add 4 application (app-only) permissions to the Entra app: `Mail.Read`, `Calendars.Read`, `Notes.Read.All`, `Files.Read.All`
+2. Grant admin consent (portal or `https://login.microsoftonline.com/{tenant-id}/v2.0/adminconsent?client_id={client-id}&scope=https://graph.microsoft.com/.default`)
+3. Apply migrations 011 + 012
+4. Deploy `integrations/cerebro-graph-ingest/`
+5. Manual test with `curl -X POST .../functions/v1/cerebro-graph-ingest -H "x-brain-key: $BRAIN_ACCESS_KEY" -d '{"source":"mail"}'`
+6. Confirm cron is scheduled at `0 11 * * *` UTC
+
+📖 Full guide → [Graph Ingest Setup](12-graph-ingest-setup.md)
+
+### 🚦 Graph Ingest Verification Gate
+
+- [ ] App-only token request succeeds (`POST /oauth2/v2.0/token` returns `access_token`)
+- [ ] `GET /v1.0/users/{userId}/messages?$top=1` returns a subject line
+- [ ] Migration 011 created `graph_ingest_state` with 4 seeded rows
+- [ ] Migration 012 scheduled `cerebro-graph-ingest-daily` (verify with `SELECT * FROM cron.job WHERE jobname = 'cerebro-graph-ingest-daily'`)
+- [ ] Manual `{"source":"all"}` returns `{"ok": true, "results": {...}}`
+- [ ] At least one row exists with `metadata->>'source' LIKE 'graph-%'`
+
+---
+
 ## You're Done! 🎉
 
 Your Cerebro brain is now operational. Here's what you've built:
@@ -521,6 +555,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | File attachments | Optional |
 | Task management | Optional |
 | Read-only MCP with OAuth | Optional |
+| Microsoft Graph daily ingest | Optional |
 
 ### Tips for Daily Use
 
@@ -554,6 +589,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | `MCP_READONLY_TENANT_ID` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
 | `MCP_READONLY_CLIENT_ID` | Phase 7 | Read-only MCP OAuth | If using read-only MCP |
 | `MCP_READONLY_ALLOWED_USERS` | Phase 7 | Read-only MCP OAuth | Optional user restriction |
+| `GRAPH_USER_ID` | Phase 8 | Microsoft Graph daily ingest | If using graph-ingest (also used by reminders) |
 
 > **Note:** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are automatically available in all Supabase Edge Functions.
 >
@@ -589,6 +625,7 @@ Your Cerebro brain is now operational. Here's what you've built:
 | Teams | `cerebro-teams` | `supabase functions deploy cerebro-teams --no-verify-jwt` |
 | Alexa | `cerebro-alexa` | `supabase functions deploy cerebro-alexa --no-verify-jwt` |
 | Digest | `cerebro-digest` | `supabase functions deploy cerebro-digest --no-verify-jwt` |
+| Graph Ingest | `cerebro-graph-ingest` | `supabase functions deploy cerebro-graph-ingest --no-verify-jwt` |
 
 **Redeploy all functions after code changes:**
 
@@ -597,5 +634,6 @@ supabase functions deploy cerebro-mcp --no-verify-jwt && \
 supabase functions deploy cerebro-discord --no-verify-jwt && \
 supabase functions deploy cerebro-teams --no-verify-jwt && \
 supabase functions deploy cerebro-alexa --no-verify-jwt && \
-supabase functions deploy cerebro-digest --no-verify-jwt
+supabase functions deploy cerebro-digest --no-verify-jwt && \
+supabase functions deploy cerebro-graph-ingest --no-verify-jwt
 ```

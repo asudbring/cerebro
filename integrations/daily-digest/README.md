@@ -28,20 +28,42 @@ The AI-generated summary includes:
 
 ### Daily
 
+- **Action Items** (top of digest) — deduplicated `metadata.action_items[]` across every bucket below, case-insensitive
+- 📧 **Important Emails** — items with `metadata.source = graph-mail` (link label: `[Open in Outlook]`)
+- 📅 **Calendar** — items with `metadata.source = graph-event` (link label: `[Open in Calendar]`)
+- 📝 **OneNote** — items with `metadata.source = graph-onenote` (link label: `[Open in OneNote]`)
+- 📄 **Documents** — items with `metadata.source = graph-file` (link label: `[Open document]`)
+- **Captured** — everything else (manual MCP/Teams/Discord/Alexa/iMessage captures)
 - Key themes and decisions made
-- Action items — open and completed
 - People mentioned and follow-ups needed
 - Upcoming reminders (next 48 hours)
 - Insights and things learned
 
 ### Weekly (additional analysis)
 
+- Stats line prepended: `Sources: N captured, N emails, N meetings, N notes, N documents`
 - Recurring themes and emerging patterns
 - Progress on goals — completed tasks vs open items
 - People and relationship touchpoints across the week
 - Key decisions and their context
 - Week stats: type breakdown, source breakdown, busiest day
 - Forward-looking observations for the week ahead
+
+The empty-state guard checks all 5 buckets — the digest is suppressed only when every bucket is empty.
+
+## Source Buckets
+
+Items are bucketed by `metadata.source`:
+
+| Source value | Bucket |
+|--------------|--------|
+| `graph-mail` | 📧 Important Emails |
+| `graph-event` | 📅 Calendar |
+| `graph-onenote` | 📝 OneNote |
+| `graph-file` | 📄 Documents |
+| anything else (`mcp`, `teams`, `discord`, `alexa`, `imessage`) | Captured |
+
+Graph-tagged rows are populated by the [`cerebro-graph-ingest`](../cerebro-graph-ingest/README.md) function.
 
 ## Environment Variables
 

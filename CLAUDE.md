@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-Cerebro is a cloud-based personal knowledge store. Supabase (PostgreSQL + pgvector) stores thoughts with 1536-dim embeddings. An MCP server exposes 12 tools — 7 core (`search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`) and 5 publishing (`search_series_bible`, `search_style_guide`, `search_editorial_history`, `search_cover_specs`, `capture_publishing`). Multiple capture channels (Discord, Teams, Alexa, iMessage) all write to the same `thoughts` table. Four publishing collections (`cerebro_series_bible`, `cerebro_style_guide`, `cerebro_editorial_history`, `cerebro_cover_specs`) support AI-powered fiction editing pipelines.
+Cerebro is a cloud-based personal knowledge store. Supabase (PostgreSQL + pgvector) stores thoughts with 1536-dim embeddings. An MCP server exposes 12 tools — 7 core (`search_thoughts`, `list_thoughts`, `thought_stats`, `capture_thought`, `complete_task`, `reopen_task`, `delete_task`) and 5 publishing (`search_series_bible`, `search_style_guide`, `search_editorial_history`, `search_cover_specs`, `capture_publishing`). Multiple capture channels (Discord, Teams, Alexa, iMessage) all write to the same `thoughts` table, plus a daily Microsoft Graph sweep (`cerebro-graph-ingest`) that auto-pulls Outlook mail, calendar, OneNote, and OneDrive/SharePoint with an AI gatekeeper. Four publishing collections (`cerebro_series_bible`, `cerebro_style_guide`, `cerebro_editorial_history`, `cerebro_cover_specs`) support AI-powered fiction editing pipelines.
 
 **License:** FSL-1.1-MIT. No commercial derivative works for the first 2 years.
 
@@ -66,6 +66,10 @@ Discord / Teams / Alexa / iMessage → Supabase Edge Functions (Deno + Hono)
                                     OpenRouter AI Gateway
                                     (embeddings, metadata extraction, vision)
 
+pg_cron @ 11:00 UTC → cerebro-graph-ingest → Microsoft Graph (app-only)
+                       (mail/calendar/OneNote/files; AI gatekeeper)
+                       → thoughts table (metadata.source = graph-*)
+
 MCP Clients → Cloudflare Worker (mcp.yourdomain.com) → Edge Functions
               (OAuth discovery, DCR stub, authorize/token proxy)
               Routes: /rw/* → primary server, /* → read-only server
@@ -74,14 +78,16 @@ MCP Clients → Cloudflare Worker (mcp.yourdomain.com) → Edge Functions
 - **Primary MCP:** 12 tools (7 core + 5 publishing), dual auth (OAuth Bearer + `x-brain-key` header)
 - **Read-Only MCP:** 3 tools, OAuth only (Entra ID JWKS validation)
 - **Cloudflare Worker:** Serves RFC 9728 metadata, strips `resource` param and rewrites `scope` from `api://` to GUID format for Entra compatibility, path-specific protected resource metadata for VS Code compatibility
+- **Graph Ingest:** Reuses existing `GRAPH_*` secrets; cron at 11:00 UTC (1 hr before daily digest at 12:00 UTC); see [docs/12-graph-ingest-setup.md](docs/12-graph-ingest-setup.md)
 
 ## Repo Layout
 
 ```text
 integrations/       — Edge Functions (mcp-server, mcp-server-readonly, cloudflare-worker,
-                      teams-capture, discord-capture, alexa-capture, imessage-capture, daily-digest)
-schemas/core/       — SQL migrations (schema.sql, 002–010), numbered sequentially
-docs/               — Setup guides (01–11)
+                      teams-capture, discord-capture, alexa-capture, imessage-capture,
+                      daily-digest, cerebro-graph-ingest)
+schemas/core/       — SQL migrations (schema.sql, 002–012), numbered sequentially
+docs/               — Setup guides (01–12)
 scripts/dbsql.py    — Pure-Python PostgreSQL client (bypasses libpq SCRAM issue)
 ```
 
@@ -89,7 +95,7 @@ scripts/dbsql.py    — Pure-Python PostgreSQL client (bypasses libpq SCRAM issu
 
 - **Protect the `thoughts` table schema.** Add columns freely, but never alter, rename, or drop existing ones.
 - **Destructive SQL is off-limits.** No `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, or unqualified `DELETE FROM`.
-- **Keep secrets out of source.** All credentials go into Supabase Secrets, never committed files.
+- **Keep secrets out of source.** All credentials go into Supabase Secrets, never committed files. This includes `GRAPH_USER_ID` — never commit real UPNs or object IDs.
 - **All server functions deploy as Supabase Edge Functions.** No local servers, stdio transports, or `claude_desktop_config.json` setups.
 - **No large binary files** (over 1 MB) in the repo.
 

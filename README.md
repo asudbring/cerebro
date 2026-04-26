@@ -8,7 +8,7 @@
 
 ---
 
-Cerebro gives you a single place to store every fleeting thought, decision, and reminder — then find it again by asking what it *meant*, not what words you used. It runs on Supabase (free tier), talks to your AI tools over MCP, and accepts input from Discord, Teams, Alexa, iMessage, or any MCP client.
+Cerebro gives you a single place to store every fleeting thought, decision, and reminder — then find it again by asking what it *meant*, not what words you used. It runs on Supabase (free tier), talks to your AI tools over MCP, and accepts input from Discord, Teams, Alexa, iMessage, any MCP client, or — opt-in — a daily Microsoft Graph sweep of your Outlook mail, calendar, OneNote, and OneDrive/SharePoint.
 
 The stack is deliberately simple: a PostgreSQL database with vector search, an AI gateway for embeddings, and Edge Functions for each integration. No middleware layers, no paid connectors, no glue services.
 
@@ -72,6 +72,7 @@ The setup guide covers:
 | **Discord** | `/capture` and `/search` slash commands | [Discord Setup](docs/03-discord-capture-setup.md) |
 | **Alexa** | "Alexa, tell cerebro …" voice commands | [Alexa Setup](docs/04-alexa-setup.md) |
 | **iMessage** | Text commands via BlueBubbles (Mac server + Cloudflare tunnel) | [iMessage Setup](docs/10-imessage-setup.md) |
+| **Microsoft Graph (daily ingest)** | Auto-pulls Outlook mail, calendar, OneNote, OneDrive/SharePoint via app-only Graph; AI gatekeeper saves only what's worth keeping | [Graph Ingest Setup](docs/12-graph-ingest-setup.md) |
 
 ## Features
 
@@ -120,7 +121,7 @@ by describing them — Cerebro uses AI to match the right one.
 ```text
 docs/           — Setup guides and documentation
 extensions/     — Feature extensions (coming soon)
-integrations/   — MCP server, Teams capture, Discord capture, Alexa voice, iMessage capture, daily digest
+integrations/   — MCP server, Teams capture, Discord capture, Alexa voice, iMessage capture, daily digest, Microsoft Graph daily ingest
 schemas/        — Database schemas and migrations (including publishing collections)
 scripts/        — Database client (dbsql.py) and publishing ingest CLI (cerebro_ingest.py)
 ```

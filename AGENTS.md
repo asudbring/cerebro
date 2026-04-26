@@ -13,28 +13,30 @@ Cerebro is a cloud-based personal knowledge store. It pairs a Supabase PostgreSQ
 ## Architecture
 
 ```text
-┌──────────────┐┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Teams Bot  │  │ Discord Bot  │  │  Alexa Skill │  │iMessage (BB) │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │                 │
-       └────────────┬────┴────────┬────────┘                 │
-                    ▼             ▼                          ▼
-            ┌──────────────────────────┐   ┌──────────────────────────┐
-            │   Supabase Edge Functions│   │  BlueBubbles (Mac) +     │
-            │   (Deno + Hono)          │   │  Cloudflare Named Tunnel │
-            └──────────┬───────────────┘   └──────────┬───────────────┘
-                       │                              │
-                       ▼                              ▼
-              ┌─────────────────────────────────────────────┐
-              │  Supabase PostgreSQL + pgvector              │
-              │  thoughts table (1536-dim embeddings)        │
-              └─────────────────────────────────────────────┘
+┌──────────────┐┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
+│   Teams Bot  │  │ Discord Bot  │  │  Alexa Skill │  │iMessage (BB) │  │ Microsoft Graph  │
+│              │  │              │  │              │  │              │  │ (daily, app-only)│
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘
+       │                 │                 │                 │                   │
+       └────────────┬────┴────────┬────────┘                 │                   │
+                    ▼             ▼                          ▼                   ▼
+            ┌──────────────────────────┐   ┌──────────────────────────┐   ┌─────────────────────┐
+            │   Supabase Edge Functions│   │  BlueBubbles (Mac) +     │   │ cerebro-graph-      │
+            │   (Deno + Hono)          │   │  Cloudflare Named Tunnel │   │ ingest (pg_cron)    │
+            └──────────┬───────────────┘   └──────────┬───────────────┘   └──────────┬──────────┘
+                       │                              │                              │
+                       ▼                              ▼                              ▼
+              ┌──────────────────────────────────────────────────────────────────────────────┐
+              │  Supabase PostgreSQL + pgvector                                              │
+              │  thoughts table (1536-dim embeddings) + graph_ingest_state                   │
+              └──────────────────────────────────────────────────────────────────────────────┘
                        │
                        ▼
               ┌─────────────────────────────┐
               │  OpenRouter AI Gateway       │
               │  - text-embedding-3-small    │
-              │  - gpt-4o-mini (metadata)    │
+              │  - gpt-4o-mini (metadata,    │
+              │    graph-ingest classifier)  │
               │  - gemini-2.0-flash (PDFs)   │
               │  - gpt-4o-mini (vision)      │
               └─────────────────────────────┘
@@ -50,7 +52,7 @@ Read-Only MCP path (OAuth):
 ### Supabase Project
 
 - **Project ref:** `YOUR_PROJECT_REF` (set during Supabase project creation)
-- **7 Edge Functions:** cerebro-mcp (12 tools), cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest
+- **8 Edge Functions:** cerebro-mcp (12 tools), cerebro-mcp-readonly, cerebro-teams, cerebro-discord, cerebro-alexa, cerebro-imessage, cerebro-digest, cerebro-graph-ingest
 - **Auth:** `x-brain-key` header (primary MCP); OAuth 2.1 via Entra ID through Cloudflare Worker proxy (both servers). Primary server supports dual auth (OAuth + API key).
 - **All functions** use Deno + Hono framework, deployed via `npx supabase functions deploy <name> --no-verify-jwt`
 
@@ -66,7 +68,7 @@ Read-Only MCP path (OAuth):
 
 ```text
 cerebro/
-├── docs/                        # Setup guides (01 through 11)
+├── docs/                        # Setup guides (01 through 12)
 ├── extensions/                  # Feature extensions (future)
 ├── integrations/
 │   ├── mcp-server/              # Core MCP server (12 tools: 7 core + 5 publishing, dual auth: OAuth + x-brain-key header)
@@ -76,9 +78,10 @@ cerebro/
 │   ├── discord-capture/         # Discord bot (slash commands)
 │   ├── alexa-capture/           # Alexa voice skill (HTTPS endpoint)
 │   ├── imessage-capture/        # iMessage via BlueBubbles webhooks
-│   └── daily-digest/            # Daily/weekly digest generator + delivery
+│   ├── daily-digest/            # Daily/weekly digest generator + delivery
+│   └── cerebro-graph-ingest/    # Daily Microsoft Graph sweep (mail/calendar/OneNote/files) with AI gatekeeper
 ├── schemas/
-│   └── core/                    # SQL migrations (schema.sql, 002–010)
+│   └── core/                    # SQL migrations (schema.sql, 002–012)
 ├── scripts/
 │   ├── dbsql.py                 # Pure-Python PostgreSQL client
 │   └── cerebro_ingest.py        # Publishing ingest CLI (series-bible, style-guide, editorial, cover-spec)
@@ -182,6 +185,18 @@ Four tables for AI-powered fiction editing pipelines (migration `010-publishing-
 
 All publishing tables follow the same pattern: `vector(1536)` embedding column with HNSW index, `metadata` JSONB column, RLS policy (`service_role` only), and `updated_at` trigger. Series/book isolation is column-based — no data overwrites between series or books.
 
+### Graph Ingest State (Migration 011)
+
+`graph_ingest_state` tracks the high-water mark for each Microsoft Graph source so daily ingest pulls only new items:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `source` | text PK | `mail`, `event`, `onenote`, or `file` |
+| `last_ingested_at` | timestamptz | Latest item timestamp seen |
+| `updated_at` | timestamptz | Auto-updated on row change |
+
+RLS: `service_role` only. Migration `012-graph-ingest-cron.sql` schedules `cerebro-graph-ingest-daily` at `0 11 * * *` UTC.
+
 ### Migration Conventions
 
 - Files in `schemas/core/` named `NNN-description.sql` (e.g., `007-source-message-id.sql`)
@@ -265,6 +280,25 @@ curl --resolve YOUR_PROJECT_REF.supabase.co:443:CLOUDFLARE_IP \
 - Delivers via email (Resend), Teams, Discord, and iMessage
 - Email recipients: configured via `DIGEST_EMAIL_RECIPIENTS` environment variable
 - Scheduled via pg_cron in Supabase
+- Buckets thoughts by `metadata.source` into 5 sections: 📧 Important Emails, 📅 Calendar, 📝 OneNote, 📄 Documents, plus everything else under "captured"
+- Top-of-digest **Action Items** section deduplicates `metadata.action_items[]` across all buckets (case-insensitive)
+- Link labels: `[Open in Outlook]`, `[Open in Calendar]`, `[Open in OneNote]`, `[Open document]`
+- Weekly digest stats prepend a `Sources: N captured, N emails, N meetings, N notes, N documents` line
+
+### Microsoft Graph Daily Ingest (cerebro-graph-ingest)
+
+- Pulls daily from Microsoft 365 via app-only Graph (client-credentials grant) — reuses the Teams/reminders Entra app
+- 4 sources tagged on `metadata.source`: `graph-mail`, `graph-event`, `graph-onenote`, `graph-file`
+- AI gatekeeper (`gpt-4o-mini` via OpenRouter) classifies each item save/skip; biased toward undersaving
+- Calendar always-save rule: events with non-empty `bodyPreview` OR more than 2 attendees are kept regardless of classifier
+- Hybrid storage: AI summary in `content` (embedded with `text-embedding-3-small`) + raw Graph metadata in JSONB
+- Action items extracted to `metadata.action_items[]`; people extracted by AI from bodies (avoids `People.Read.All` delegated-only restriction)
+- Dedup via `source_message_id` = `<source>:<itemId>` (e.g., `graph-mail:AAMkAD...`)
+- High-water mark per source in `graph_ingest_state` table; calendar uses fixed `now-1d` to `now+2d` window
+- Auth: `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>` (cron) OR `x-brain-key` header (manual)
+- Body: `{"source":"all" | "mail" | "event" | "onenote" | "file"}` (default `all`)
+- Cron: `0 11 * * *` UTC (1 hour before daily digest at `0 12 * * *`)
+- Required app-only Graph permissions (admin consent): `Mail.Read`, `Calendars.Read`, `Notes.Read.All`, `Files.Read.All`
 
 ## Known Issues & Workarounds
 
@@ -314,10 +348,10 @@ These are set via `npx supabase secrets set` and available in Edge Functions:
 | BLUEBUBBLES_URL | imessage, digest | `https://bb.yourdomain.com` |
 | BLUEBUBBLES_PASSWORD | imessage, digest | BlueBubbles server password |
 | BLUEBUBBLES_ALLOWED_CHATS | imessage | Comma-separated chat GUIDs |
-| GRAPH_TENANT_ID | teams, imessage | Microsoft Graph tenant ID |
-| GRAPH_CLIENT_ID | teams, imessage | Microsoft Graph app ID |
-| GRAPH_CLIENT_SECRET | teams, imessage | Microsoft Graph secret |
-| GRAPH_USER_ID | teams, imessage | O365 user ID for calendar |
+| GRAPH_TENANT_ID | teams, imessage, graph-ingest | Microsoft Graph tenant ID |
+| GRAPH_CLIENT_ID | teams, imessage, graph-ingest | Microsoft Graph app ID |
+| GRAPH_CLIENT_SECRET | teams, imessage, graph-ingest | Microsoft Graph secret |
+| GRAPH_USER_ID | teams, imessage, graph-ingest | O365 user ID (calendar + mailbox/notes/files for graph-ingest) |
 | GOOGLE_SERVICE_ACCOUNT_JSON | teams, imessage | Google Calendar credentials |
 | GOOGLE_CALENDAR_ID | teams, imessage | Google Calendar ID |
 | RESEND_API_KEY | digest | Resend email API key |

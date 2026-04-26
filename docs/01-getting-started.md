@@ -433,3 +433,4 @@ Once your MCP server is working, you can add more ways to capture thoughts. See 
 | Alexa | [Alexa Setup](04-alexa-setup.md) | "Alexa, tell cerebro …" voice commands |
 | Calendar Reminders | [Reminders Setup](05-reminders-setup.md) | Auto-create O365/Google calendar events from captured dates |
 | Daily Digest | [Digest Setup](06-daily-digest-setup.md) | Automated daily/weekly summaries to Teams + Discord |
+| Microsoft Graph daily ingest | [Graph Ingest Setup](12-graph-ingest-setup.md) | Once configured, your M365 mail / calendar / OneNote / OneDrive content auto-flows into Cerebro every morning |
