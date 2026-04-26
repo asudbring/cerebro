@@ -40,6 +40,7 @@ interface SourceResult {
   saved: number;
   skipped: number;
   error?: string;
+  note?: string;
 }
 
 interface ClassifierResult {
@@ -71,7 +72,11 @@ async function getGraphToken(): Promise<string | null> {
     },
   );
   const data = await r.json();
-  return data.access_token || null;
+  if (!data.access_token) {
+    console.error(`[graph-ingest] token error: ${JSON.stringify(data)}`);
+    throw new Error(`token: ${data.error}: ${(data.error_description || "").slice(0, 200)}`);
+  }
+  return data.access_token;
 }
 
 // --- AI helpers ---
@@ -248,7 +253,7 @@ async function graphGet<T = unknown>(
   if (!r.ok) {
     const msg = await r.text().catch(() => "");
     console.error(`[graph-ingest] Graph GET ${r.status} ${url}: ${msg}`);
-    return null;
+    throw new Error(`Graph GET ${r.status}: ${msg.slice(0, 200)}`);
   }
   return (await r.json()) as GraphPage<T>;
 }
@@ -262,9 +267,9 @@ async function pullMail(
 ): Promise<SourceResult> {
   const result: SourceResult = { pulled: 0, saved: 0, skipped: 0 };
   const baseUrl =
-    `${GRAPH_BASE}/users/${encodeURIComponent(userId)}/mailFolders/Inbox/messages` +
+    `${GRAPH_BASE}/users/${encodeURIComponent(userId)}/messages` +
     `?$filter=${encodeURIComponent(`receivedDateTime ge ${since.toISOString()}`)}` +
-    `&$top=50` +
+    `&$top=25` +
     `&$orderby=${encodeURIComponent("receivedDateTime asc")}` +
     `&$select=${encodeURIComponent(
       "id,subject,bodyPreview,from,receivedDateTime,webLink,importance,flag",
@@ -273,13 +278,15 @@ async function pullMail(
   let url: string | undefined = baseUrl;
   let pages = 0;
   let maxSeen: Date | null = null;
+  const MAX_ITEMS = 20;
 
-  while (url && pages < 5) {
+  while (url && pages < 5 && result.pulled < MAX_ITEMS) {
     const page: GraphPage<Record<string, any>> | null = await graphGet(url, token);
     if (!page) break;
     pages++;
 
     for (const msg of page.value || []) {
+      if (result.pulled >= MAX_ITEMS) break;
       result.pulled++;
       const sourceMessageId = `graph-mail:${msg.id}`;
 
@@ -701,7 +708,15 @@ app.post("*", async (c) => {
     );
   }
 
-  const token = await getGraphToken();
+  let token: string;
+  try {
+    token = (await getGraphToken())!;
+  } catch (e) {
+    return c.json(
+      { success: false, error: `failed to obtain Graph token: ${(e as Error).message}` },
+      500,
+    );
+  }
   if (!token) {
     return c.json(
       { success: false, error: "failed to obtain Graph token" },
@@ -724,10 +739,24 @@ app.post("*", async (c) => {
       const r = await fn();
       return [key, r];
     } catch (err) {
+      const msg = String(err);
+      // Known permanent failures: surface as clean skip with note rather than error.
+      // OneNote app-only auth was deprecated by Microsoft 2025-03-31 (returns 401 code 40001).
+      // /drive/recent does not support app-only auth (returns 403 accessDenied).
+      if (
+        (key === "onenote" && /401/.test(msg)) ||
+        (key === "file" && /403/.test(msg))
+      ) {
+        const note = key === "onenote"
+          ? "OneNote app-only deprecated by Microsoft (2025-03-31)"
+          : "/drive/recent does not support app-only auth";
+        console.warn(`[graph-ingest][${key}] skipping: ${note}`);
+        return [key, { pulled: 0, saved: 0, skipped: 0, note }];
+      }
       console.error(`[graph-ingest][${key}] fatal:`, err);
       return [
         key,
-        { pulled: 0, saved: 0, skipped: 0, error: String(err) },
+        { pulled: 0, saved: 0, skipped: 0, error: msg },
       ];
     }
   };
